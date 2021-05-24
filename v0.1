@@ -1,0 +1,850 @@
+const SmartAoE = (() => {
+    const scriptName = "SmartAoE";
+    const version = '0.0';
+    const schemaVersion = '0.1';
+    const byTOKEN = 'TOKEN';
+    const byPATH = 'PATH';
+    const clearTOKEN = 'TOKEN';
+    const clearALL = 'ALL';
+    const CONTROL_TOK_NAME = 'AOEControlToken'
+    
+    const pt = function(x,y) {
+        this.x = x,
+        this.y = y
+    };
+    
+    const checkInstall = function() {
+        log(scriptName + ' v' + version + ' initialized.');
+        
+        delete state[scriptName];
+        
+        if( ! _.has(state, scriptName) || state[scriptName].version !== schemaVersion) {
+            log('  > Updating Schema to v'+schemaVersion+' <');
+            switch(state[scriptName] && state[scriptName].version) {
+                case 0.1:
+                /* falls through */
+                case 'UpdateSchemaVersion':
+                    state[scriptName].version = schemaVersion;
+                    break;
+
+                default:
+                    state[scriptName] = {
+                        version: schemaVersion,
+                        links: []
+                    };
+                    break;
+            }
+        }
+        log(state[scriptName]);
+    };
+    
+    const clearCache = function(who, tokID=undefined, pageID=undefined) {
+        //no arguments passed, clear all pinked pairs in ENTIRE CAMPAIGN
+        if(!tokID && !pageID) {
+            state[scriptName] = {
+                version: schemaVersion,
+                links: []
+            };
+            //if (!silent) {
+                sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked!');
+            //}
+            return;
+        }
+        
+        //token only
+        if (tokID) {
+            //iterate through linked pairs in state object to find pairs associated with tokID
+            for (let i = state[scriptName].links.length-1; i>-1; i--) {
+                if (state[scriptName].links[i].tokID === tokID) {
+                    //remove linked pair ids from state object
+                    state[scriptName].links.splice(i,1);
+                    sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked for tokID = ' + tokID);
+                }
+            }
+        } 
+        
+        //all linked tokens in current page
+        if (pageID) {
+            //iterate through linked pairs in state object to find pairs associated with pageID
+            for (let i = state[scriptName].links.length-1; i>-1; i--) {
+                if (state[scriptName].links[i].pageID === pageID) {
+                    //remove linked pair ids from state object
+                    state[scriptName].links.splice(i,1);
+                }
+            }
+            sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked for all tokens in pageID = ' + pageID);
+        } 
+        //log(state[scriptName]);
+    }
+    
+    const updateAoELink = function(index, pathIDs) {
+        //clear old paths from memory
+        log('updating AoELink, index=' + index);
+        log('new pathIDs = next');
+        log(pathIDs);
+        log('state before update');
+        log(state[scriptName]);
+        state[scriptName].links[index].pathIDs = [];
+        state[scriptName].links[index].pathIDs = pathIDs.map((x) => x);
+        log('state after update');
+        log(state[scriptName]);
+    }
+    
+    const makeAoELink = function(originTokID, controlTokID, pathIDs, pageID) {
+        //log(originTokID + ',' + controlTokID + ',' + pathIDs + ',' + pageID);
+        let pathArr = [];
+        pathArr.push(pathIDs);
+        let link =  {
+            aoeType: 'line',
+            originTokID: originTokID,
+            controlTokID: controlTokID,
+            pathIDs: pathArr,
+            pageID: pageID
+        };
+        
+        state[scriptName].links.push(link);
+        return link;
+    }
+    
+    //Return object containing arrays of {[linkObj], [indices]} from state object, given tokenID or pathID based on searchType. Returns undefined if none found. 
+    const getAoELinks = function(ID) {
+        let linkObjs = [];
+        let indices = [];
+        
+        log('finding link for tokID = ' + ID);
+        state[scriptName].links.forEach((link, index) => {
+            if (link.controlTokID === ID || link.originTokID === ID) {
+                linkObjs.push(link);
+                indices.push(index);
+            }
+        });
+        
+        /*
+        let link = state[scriptName].links.filter(function (p) {
+            if (searchType === byTOKEN) {
+                return (p.controlTokID === ID || p.originTokID === ID);
+            //} else {
+            //    return p.pathID === ID;
+            }
+        });
+        */
+        
+        if (linkObjs.length>0) {
+            let retVal = {
+                links: linkObjs,
+                indices: indices
+            }
+            return retVal;
+        } else {
+            return undefined;
+        }
+    }
+    
+    const spawnTokenAtXY =  function(who, tokenJSON, pageID, spawnX, spawnY, sizeX, sizeY, controlledby) {
+        let spawnObj;
+        let imgsrc;
+        
+        try {
+            let baseObj = JSON.parse(tokenJSON);
+            
+            //set token properties
+            baseObj.pageid = pageID;
+            baseObj.left = spawnX;
+            baseObj.top = spawnY;
+            baseObj.width = sizeX;
+            baseObj.height = sizeY;
+            baseObj.controlledby = controlledby;
+            
+            baseObj.imgsrc = getCleanImgsrc(baseObj.imgsrc); //ensure that we're using the thumb.png
+            
+            //image must exist in personal Roll20 image library 
+            if (baseObj.imgsrc ===undefined) {
+                sendChat(scriptName,`/w "${who}" `+ 'Unable to find imgsrc for default token of \(' + baseObj.name + '\)' + "<br>" + 'You must use an image file that has been uploaded to your Roll20 Library.')
+                return;
+            }
+            
+            //Spawn the Token!
+            //controlTok = createObj('graphic',baseObj);
+            
+            
+            return new Promise(resolve => {
+                controlTok = createObj('graphic',baseObj);
+                resolve(controlTok);
+            });
+            
+        }
+        catch(err) {
+          sendChat('SmartAoE',`/w "${who}" `+ 'Unhandled exception: ' + err.message)
+        }
+    };
+    
+    const buildSquare = function(rad) {
+        let ptUL = new pt(0,0);
+        let ptUR = new pt(2*rad,0);
+        let ptLR = new pt(2*rad,2*rad);
+        let ptLL = new pt(0,2*rad);
+        
+        //Full square
+        //squarePoints = `[[\"M\",0,0],[\"L\",0,${2*rad}],[\"L\",${2*rad},${2*rad}],[\"L\",${2*rad},0],[\"L\",0,0]]`;
+        let squarePointsJSON = `[[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUR.x},${ptUR.y}],[\"L\",${ptLR.x},${ptLR.y}],[\"L\",${ptLL.x},${ptLL.y}],[\"L\",${ptUL.x},${ptUL.y}]]`;
+        
+        //log(squarePointsJSON);
+        return squarePointsJSON;
+    };
+    
+    const buildCircle = function(rad, coneWidth, coneDirection) {
+        let circlePoints;
+        let steps, stepSize;
+        let deg2rad = Math.PI/180;
+        
+        steps = Math.min(Math.max(Math.round( (Math.PI*2*Math.sqrt((2*rad*rad)/2))/35),4),20);
+        
+        const at = (theta) => ({x: Math.cos(theta)*rad, y: Math.sin(theta)*rad}); 
+        
+        if (coneWidth === 360) { 
+            //Build a full circle
+            stepSize = Math.PI/(2*steps);
+            
+            let acc=[[],[],[],[]];
+            let th=0;
+            _.times(steps+1,()=>{
+                let pt=at(th);
+                acc[0].push([pt.x,pt.y]);
+                acc[1].push([-pt.x,pt.y]);
+                acc[2].push([-pt.x,-pt.y]);
+                acc[3].push([pt.x,-pt.y]);
+                th+=stepSize;
+            });
+            acc = acc[0].concat(
+                acc[1].reverse().slice(1),
+                acc[2].slice(1),
+                acc[3].reverse().slice(1)
+            );
+            
+            //Some js wizardry from TheAaron with the array map function. I couldn't make it work without returning the outer (1st & last) square brackets
+            //So, we will take this string, strip the last "]", then append the grid points to the path
+            circlePoints = JSON.stringify(acc.map((v,i)=>([(i?'L':'M'),rad+v[0],rad+v[1]])));
+            circlePoints = circlePoints.substring(0, circlePoints.length - 1);
+        } else {
+            //build a cone instead
+            steps = 50;
+            stepSize = deg2rad * (coneWidth/(steps));
+            
+            let oX = oY = rad;
+            let x, y;
+            let startAngle = deg2rad * (coneDirection - coneWidth/2);
+            let endAngle = deg2rad * (coneDirection + coneWidth/2);
+            let ptUL = new pt(0,0);
+            let ptUR = new pt(2*rad,0);
+            let ptLR = new pt(2*rad,2*rad);
+            let ptLL = new pt(0,2*rad);
+            
+            //start path at the origin pt 
+            circlePoints = `[[\"M\",${oX},${oY}],`;
+            
+            //for loop takes into account cumulative floating point precision error
+            for (let th=startAngle; th<endAngle+Number.EPSILON*steps; th+=stepSize) {
+                //change in "normal" polar coord conversion due to 0deg being straight up and positive Y being "down"
+                x = oX + oX * Math.sin(th);
+                y = oY + oY * Math.cos(th + deg2rad*180);
+                circlePoints = circlePoints + `[\"L\",${x},${y}],`
+            }
+            
+            //connect back to the origin pt
+            circlePoints = circlePoints + `[\"L\",${oX},${oY}],`;
+            //add "phantom" single points to path corresponding to the four corners to keep the size computations correct
+            circlePoints = circlePoints + `[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUL.x},${ptUL.y}],[\"M\",${ptUR.x},${ptUR.y}],[\"L\",${ptUR.x},${ptUR.y}],[\"M\",${ptLR.x},${ptLR.y}],[\"L\",${ptLR.x},${ptLR.y}],[\"M\",${ptLL.x},${ptLL.y}],[\"L\",${ptLL.x},${ptLL.y}],[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUL.x},${ptUL.y}]`;
+        }
+        
+        //return  the path JSON
+        return circlePoints + "]";
+    };
+    
+    async function deleteLinkedPaths (pathIDs) {
+        //delete the linked paths and clear the pathIDs array from the state object
+        //log('entered deleteLinkedPaths function')
+        //log(pathIDs);
+        log(pathIDs.length);
+        pathIDs.forEach((pathID) => {
+            //log('this pathID = ' + pathID)
+            path = getObj('path',pathID);
+            if (path) {
+                //log('removing path ' + pathID);
+                path.remove();
+                path = getObj('path',pathID);
+                //log(path);
+            }  
+        });
+        /*
+        state[scriptName].links[index].pathIDs.forEach((pathID) => {
+          path = getObj('path',pathID);
+            if (path) {
+                path.remove();
+            }  
+        });
+        //state[scriptName].links[index].pathIDs = [];
+        return new Promise(resolve => {
+            log('delete done');
+            resolve('done');
+        });
+        */
+        //log(state[scriptName]);
+    }
+    
+    async function createPath(pathstring, pageID, layer, fillColor, strokeColor, strokeWidth, height, width, left, top) {
+        //let promise = new Promise(resolve => {
+            log('about to create path');
+            
+                let path = createObj("path", {                
+                    pageid: pageID,
+                    path: pathstring,
+                    fill: "#ff000050",
+                    stroke: "#000000",
+                    layer: "gmlayer",
+                    stroke_width: 2,
+                    width: cTok.get("width"),
+                    height: cTok.get("height"),
+                    left: newX,
+                    top: newY
+                });
+                return path
+                //resolve(path);
+            
+        //});
+        
+        /*
+        result = await promise;
+        log(result);
+        return result;
+        */
+    }
+    
+    //Move DL path to remain under source token
+    function smartAoE_handleTokenChange (obj,prev) {
+        //find all paths linked to token, returns an array of aoeLinks objects or undefined
+                //aoeLinks object looks like {links:[{aoeType, originTokID, controlTokID, pathIDs[], pageID}], indices:[]}
+        //let path;
+        let newPaths = [];
+        let aoeLinks = getAoELinks(obj.get('id'));
+        log('aoeLinks = next line')
+        log(aoeLinks);
+        
+        if (aoeLinks && obj && prev) {
+            
+            //delete the linked paths and clear the pathIDs array from the state object
+            
+            //do for each matching link in state object 
+            for (i=0; i<aoeLinks.indices.length; i++) {
+                newPaths = [];
+                log('i = ' + i);
+            
+            //aoeLinks.indices.forEach((index) => {   
+                
+               	//generate new paths based on aoeType and current posiitons or originTok and controlTok
+                let oTok = getObj("graphic", aoeLinks.links[i].originTokID);
+                //log('oTok');
+                //log(oTok);
+                let cTok = getObj("graphic", aoeLinks.links[i].controlTokID);
+                let height = cTok.get("height");
+                let width = cTok.get("width");
+                
+                let originPt = new pt(oTok.get('left'), oTok.get('top'))
+                let controlPt = new pt(cTok.get('left'), cTok.get('top'))
+                let newX = (originPt.x + controlPt.x) / 2;
+                let newY = (originPt.y + controlPt.y) / 2;
+                let pageID = aoeLinks.links[i].pageID
+                
+                //physically delete existing paths
+                //deleteLinkedPaths(aoeLinks.links[index].pathIDs);
+                aoeLinks.links[i].pathIDs.forEach((pathID) => {
+                    //log('this pathID = ' + pathID)
+                    let thisPath = getObj('path',pathID);
+                    //log(thisPath);
+                    if (thisPath) {
+                        log('removing path ' + pathID);
+                        thisPath.remove();
+                        thisPath = getObj('path',pathID);
+                        log(thisPath);
+                    }  
+                });
+                
+                
+                
+                
+                //make new path
+                let pathstring = buildSquare(35);
+                //log(pathstring);
+                
+                //let path = createPath(pathstring, pageID, layer, fillColor, strokeColor, strokeWidth, height, width, left, top)
+                //let path = await createPath(pathstring, pageID, 'gmlayer', '#ff000050', '#000000', 2, height, width, newX, newY);
+                //log('path returned from function')
+                //log(path);
+                
+                //log('gonna make a path');
+                let path = createObj("path", {                
+                    pageid: pageID,
+                    path: pathstring,
+                    fill: "#ff000050",
+                    stroke: "#000000",
+                    layer: "gmlayer",
+                    stroke_width: 2,
+                    width: cTok.get("width"),
+                    height: cTok.get("height"),
+                    left: newX,
+                    top: newY
+                });
+                //log('path created, add id to newPaths')
+                newPaths.push(path.get('_id'));
+                //log(newPaths)
+                
+            //});
+                //replace old paths from state object with the new paths 
+                let updatedLink = updateAoELink(aoeLinks.indices[i], newPaths);
+                log('State after iteration = ' + i)
+                log(state[scriptName]);
+            }
+            
+            
+            
+            
+            
+            //calc delta X & Y
+            //let dX = obj.get('left') - prev['left']
+            //let dY = obj.get('top') - prev['top']
+            //log('token changed: dX, dY= ' + dX + ',' + dY);
+            //move path object(s) based on source token movement
+            
+           
+            /*
+            aoeLinks.links.forEach((link) => {
+                link.pathIDs.forEach((pathID) => {
+                    let path = getObj('path', pathID);
+                    
+                    if (path) {
+                        let newX = parseInt(path.get('left')) + dX;
+                        let newY = parseInt(path.get('top')) + dY;
+                        path.set({left:newX, top:newY});
+                    }
+                });
+            });
+            */
+            
+        } 
+    }
+    
+    const smartAoE_handleRemoveToken = function(obj) {
+        //find all paths linked to token, returns an array of aoeLinks objects or undefined
+                //aoeLinks object looks like {links:[{aoeType originTokID, controlTokID, pathIDs[], pageID}], indices:[]}
+        let tokID = obj['id'];
+        let aoeLinks = getAoELinks(obj.get('id'));
+        log('aoeLinks for remove token');
+        log(aoeLinks);
+        if (aoeLinks) {
+            //aoeLinks.indices.forEach((index) => {
+            for (i=aoeLinks.indices.length-1; i>-1; i--) {
+                //delete the linked paths and clear the the associated links arrays from the state object
+                deleteLinkedPaths(state[scriptName].links[i].pathIDs);
+                //log('removing link index=' + index);
+                log(state[scriptName])
+                //state[scriptName].links[index] = [];
+                state[scriptName].links.splice(i, 1)
+                //log(state[scriptName])
+            
+            }    
+            //});
+        }
+        
+        
+        /*
+        //iterate through linked pairs in state object to find pairs associated with tokID
+        for (let i = state[scriptName].links.length-1; i>-1; i--) {
+            if (state[scriptName].links[i].controlTokID === tokID || state[scriptName].links[i].originTokID === tokID) {
+                //get associated path objects and remove if they still exists
+                let path;
+                for (let p = 0; p < state[scriptName].links[i].pathIDs.length; p++) {
+                    path = getObj('path',state[scriptName].links[i].pathIDs[p]);
+                    if (path) {
+                        path.remove();
+                    } else {
+                        //remove linked pair ids from state object (shouldn't ever get called, but here just in case)
+                        state[scriptName].links.splice(i,1);
+                    }
+                }
+                state[scriptName].links.splice(i,1);
+            }
+        }
+        */
+        //log(state[scriptName]);
+    };
+    
+    //returns character object for given name
+    const getCharacterFromName = function (charName) {
+        let character = findObjs({
+            _type: 'character',
+            name: charName
+        }, {caseInsensitive: true})[0];
+        return character;
+    };
+    
+    function processInlinerolls(msg) {
+    	if(_.has(msg,'inlinerolls')){
+    		return _.chain(msg.inlinerolls)
+    		.reduce(function(m,v,k){
+    			var ti=_.reduce(v.results.rolls,function(m2,v2){
+    				if(_.has(v2,'table')){
+    					m2.push(_.reduce(v2.results,function(m3,v3){
+    						m3.push(v3.tableItem.name);
+    						return m3;
+    					},[]).join(', '));
+    				}
+    				return m2;
+    			},[]).join(', ');
+    			m['$[['+k+']]']= (ti.length && ti) || v.results.total || 0;
+    			return m;
+    		},{})
+    		.reduce(function(m,v,k){
+    			return m.replace(k,v);
+    		},msg.content)
+    		.value();
+    	} else {
+    		return msg.content;
+    	}
+    }
+    
+    const parseArgs = function(msg) {
+        msg.content = msg.content
+            .replace(/<br\/>\n/g, ' ')
+            .replace(/(\{\{(.*?)\}\})/g," $2 ")
+        
+        //Check for inline rolls
+        inlineContent = processInlinerolls(msg);
+        
+        let args = inlineContent.split(/\s+--/).map(arg=>{
+                let cmds = arg.split('|');
+                return {
+                    cmd: cmds.shift().toLowerCase().trim(),
+                    params: cmds[0]
+                };
+            });
+        return args;
+    };
+    
+    const smartAoE_handleInput = function(msg) {
+        let who;
+        let tok;
+        let tokID;
+        let pageID;
+        let selected = msg.selected;
+        let range = -999;           //maximum range, in pixels
+        let aoeType = 'line';
+        var controlTok;             //hoist to top so we can set from within a callback function
+        
+        let pathstring;             //JSON string for wavefront paths
+        let pathstring_old;         //JSON string for wavefront paths
+        let polygon = [];           //array containing points of leading animated wavefront
+        let polygon_old = [];       //array containing points of trailing animated wavefront
+        
+        let selectedID;             //selected token
+        let playerID;               //which player called the script. Will determine who gets whispered results 
+        let oTok;                   //origin token
+        let validArgs = "range, wavespacing, wavedelay, wavelife, pinglife, layer, charfilter, tokfilter, title, silent, units, LoS, selectedID, playerID";
+        let convertRange = "";      //will we need to convert range from pixels to "u" or another page-defined distance unit?
+        var wavetype = 'circle';    //wavefront will either be circular or square
+        let waveIncrement = 35;     //the spacing between waves, in pixels (lower number = slower wavefront)
+        let waveDelay = 50;         //how much time to wait between each wave increment, in ms (higher number = slower wavefront)
+        let waveLife = 200;         //how long each wave wil remain on screen, in ms (higher number = more waves present at any one time)
+        let waveColor = '#ff0000';
+        let tokLife = 2000;         //how long each "RadarPing" token wil remain on screen, in ms 
+        let layers = ['objects', 'gmlayer'];    //the layersin which to look for tokens. Default values are overriden if --layers command is used 
+        let filter = {              //optional filters for which tokens will be actively pinged
+            type: "",               //types include "char" and "tok"
+            attr: "",               //key to filter on. e.g. "npc_type" attribute for a character sheet, or "bar3" for a token filter
+            vals: [],                //array of values for which to filter against filter.attr     e.g. ["celestial", "fiend", "undead"]
+            colors: [],
+            compareType: [],        //possible values: 'contains'(val is somewhere in string), '@'(exact match), '>' or '<' (numeric comparison)
+            ignore: [],             //flag to determine if the value is an ignore filter or a positive match filter
+            anyValueAllowed: false  //this flag will bypass normal checks. Used only for charFilters - The attribute just needs to exist in order for the token to be pinged 
+        }
+        let losBlocks = false;      //Will DL walls block radar sensor if completely obscured (will look at 5 pts per token to determine LoS)
+        let title = "Radar Ping Results";             //title of the default template output
+        let content = "";           //string value that will contain all the row content for default templates
+        let displayOutput = true    //output results via sendChat (default template)
+        let pageScaleNumber = 5;    //distance of one unit
+        let pageScaleUnits = "ft";  //the type of units to use for the scale
+        let pageGridIncrement = 1;  //how many gridlines per 70px
+        let displayUnits = "u";         //output distances in "units" or use pageScaleUnits 
+        let includeTotalDist = false;   //inlude the total range in the output, or just directional (X & Y distances)
+        let hasSight = false;       //Will the RadarPing token grant temporary sight to the 
+        let includeGM = false;      //Send a copy of the ouput to the GM chat if player calls script
+        let seeAnimation = true;
+        
+        let gmToks = [];            //array of all tokens on GM layer
+        let objToks = [];           //array of all tokens on object layer
+        let wallToks = [];          //array of all tokens on walls (DL)  layer
+        let mapToks = [];           //array of all tokens on map layer
+        let allToks = [];           //concatenation of gmToks and allToks
+        let tokIdDist = [];         //array of token(-ish) objects with properties {id, left, right, width, height, and dist to origin}
+        let toksInRange = [];       //subset of allToks, thos ewithin range of origin token
+        let padding = 20;           //ping object will be slightly larger than found tokens, to account for Roll20 zOrder "bug"
+        let radius; 
+        let originX;
+        let originY;
+        let originPt;
+        let controlledby;
+        let retVal = [];                //array of potential error messages to pass back to main smartAoE_handleInput funtion
+        let filterExcludeOnly = false;  //wil be set to true if token filters only include "ignore" tags
+        let useGrid = false;            //default background html setting 
+        let useCircles = false;         //default background html setting
+        let useRadial = false;          //default background html setting
+        let outputGraph = false;        
+        let outputTable = false;
+        let outputCompact = false;       //set to true for single line table output - total distance will not be included in output. 
+        let coneWidth = 360;
+        let coneDirection = 0;
+        let outputLines = [];
+        let groupBy = true;             //if filters are used, group tokens by filter condition in table output
+        let calcType = 'Euclidean';     //Can set to 'PF' to use the 'every-other-diagonal-counts-as-1.5-units' math (only for gridded maps)
+        
+        
+        
+        try {
+            //----------------------------------------------------------------------------
+            //   Optional script operation - clears linked pairs
+            //      e.g.    !smartaoeclear tok    //clears all linked pairs associated with the selected token
+            //              !smartaoeclear page    //clears all linked pairs on current page
+            //              !smartaoeclear campaign    //clears all linked pairs in ENTIRE CAMPAIGN
+            //----------------------------------------------------------------------------
+            /*
+            if(msg.type=="api" && msg.content.toLowerCase().indexOf("!smartaoeclear")==0) {
+                who = getObj('player',msg.playerid).get('_displayname');
+                
+                let cmd = msg.content.split(/\s+/);
+                
+                if (cmd.length > 1) {
+                    
+                    if (msg.selected !== undefined) {
+                        tokID = msg.selected[0]['_id'];
+                        tok = getObj("graphic",tokID);
+                        pageID = tok.get('pageid');
+                    }
+                    
+                    switch(cmd[1].toLowerCase()) {
+                        case 'tok':
+                            if (tokID) {
+                                let clearTok = clearCache(who, tokID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'token':
+                            if (tokID) {
+                                let clearTok = clearCache(who, tokID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'page':
+                            if (tokID) {
+                                let clearTok = clearCache(who, undefined, pageID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'campaign':
+                            let clear = clearCache(who);
+                            break;
+                        default:
+                            sendChat(scriptName,`/w "${who}" `+ 'Unknown argument. Format is \"!smartAoEclear tok/page/campaign\"');
+                            break;
+                    }
+                }
+                return;
+            }
+            */
+            
+            //--------------------------------------------------------------------
+            //   Normal script operation
+            //--------------------------------------------------------------------
+            if(msg.type=="api" && msg.content.toLowerCase().indexOf("!smartaoe")==0) {
+                log(msg);
+                //Parse msg into an array of argument objects [{cmd:params}]
+                let args = parseArgs(msg);
+                args.shift();
+                
+                //assign values to our params arrray based on args
+                args.forEach((arg) => {
+                    let option = arg["cmd"].toLowerCase().trim();
+                    let param = arg["params"].trim();
+                    
+                    switch(option) {
+                        case "range":
+                            range = parseFloat(param);
+                            let u = param.match(/[a-z]/i);   //if not an empty string, we will use page settings to convert range to "u" or other map-defined units
+                            if (u !== null) {
+                                convertRange = u[0]
+                            }
+                            break;
+                        case "aoetype":
+                            let w = param.toLowerCase();
+                            if (w.includes('sq')) {
+                                wavetype = 'square';
+                            } else if (w.includes('5e')) {
+                                wavetype = '5e';
+                                coneWidth = 53.14;
+                            } else {
+                                wavetype = 'circle';
+                            }
+                            let tempConeParams = param.split(",").map(layer => layer.trim() );
+                            if (tempConeParams.length > 1) {
+                                coneDirection = tempConeParams[1];  //this may be an angle or a tokenID. Later, we will parseFloat or find the angle between selected & target tokens
+                            }
+                            if (tempConeParams.length > 2 && wavetype !== '5e') {
+                                coneWidth = parseFloat(tempConeParams[2]);
+                            }
+                            break;
+                        
+                        default:
+                            retVal.push('Unexpected argument identifier (' + option + '). Choose from: (' + validArgs + ')');
+                            break;    
+                    }
+                }); //end forEach arg
+                
+                who = getObj('player',msg.playerid).get('_displayname');
+                
+                //Token select or ID validation
+                if (selectedID===undefined && msg.selected===undefined) {
+                    sendChat(scriptName,`/w "${who}" `+ 'You must either select a token or pass the tokenID via --selectedID');
+                    return;
+                }
+                //Get the origin token object from either msg or an explicitly defined tokenID
+                if (selectedID===undefined) {
+                    oTok = getObj("graphic",msg.selected[0]._id);
+                } else {
+                    //log(selectedID);
+                    oTok = getObj("graphic",selectedID);
+                }
+                //Set controlledBy property of token to determine who can move the control token. Include all GMs
+                if (playerID===undefined) {
+                    controlledby = msg.playerid;
+                } else {
+                    controlledby = playerID;
+                }
+                
+                //First data validation checkpoint
+                if (retVal.length > 0) {
+                    sendChat(scriptName,`/w "${who}" `+ retVal);
+                    return;
+                };
+                
+                //----------------------------------------------------------------
+                
+                //Get token values and page settings
+                originWidth = oTok.get("width")
+                originHeight = oTok.get("height")
+                originAvgSize = (originWidth+originHeight)/2;
+                radius = originWidth/2;         //starting radius for animated wavefront
+                pageID = oTok.get("pageid");
+                
+                originX = oTok.get("left");
+                originY = oTok.get("top");
+                originPt = new pt(originX, originY);
+                
+                //check to see if a cone angle was given explicitly or via the angle between the selected and target token
+                if (isNaN(coneDirection)) { 
+                    //"coneDirection" is holding a tokenID right now
+                    coneDirection = getAngle2TargetToken(who, originPt, coneDirection);
+                } else {
+                    //coneDirection is an explicitly defined angle
+                    coneDirection = parseFloat(coneDirection);
+                }
+                
+                //log('oTok_XY = ' + originX + ', ' + originY);
+                
+                let thePage = getObj("page", pageID);
+                pageScaleNumber = thePage.get("scale_number");
+                pageScaleUnits = thePage.get("scale_units");
+                pageGridIncrement = thePage.get("snapping_increment");
+                pageDL = thePage.get("showlighting") || thePage.get("dynamic_lighting_enabled")
+                
+                //possibly convert the range from user-supplied units to pixels
+                if (convertRange !== "") {
+                    if (pageGridIncrement !== 0) {  //grid map
+                        if (convertRange === "u") {
+                            range = range * 70 * pageGridIncrement;                 //convert from "u" to pixels
+                        } else {
+                            range = (range * 70 * pageGridIncrement) / pageScaleNumber; //convert from page units to pixels
+                        }
+                    } else {                        //gridless map, only use page settings
+                        if (convertRange === "u") {
+                            sendChat(scriptName,`/w "${who}" `+ 'Warning: Units \"u\" selected on a gridless map. Range will be calculated in pixels and will probably be much smaller than expected ');
+                        } else {
+                            range = (range * 70) / pageScaleNumber;
+                        }
+                    }
+                }
+                
+                let spawnObj = getCharacterFromName(CONTROL_TOK_NAME);
+                log(spawnObj);
+                if (spawnObj === undefined) {
+                    sendChat(scriptName,`/w "${who}" Error: Character \"${CONTROL_TOK_NAME}\" must be in the journal with a default token `);
+                    return;
+                }
+                spawnObj.get("_defaulttoken", async function(defaultToken) {
+                    controlTok = await spawnTokenAtXY(who, defaultToken, pageID, originX, originY, originWidth, originHeight, controlledby);
+                    //log(controlTok);
+                    let pathstring = buildSquare(radius);
+                    //log(pathstring);
+                    let path = createObj("path", {                
+                        pageid: controlTok.get("pageid"),
+                        path: pathstring,
+                        fill: "#ff000050",
+                        stroke: "#000000",
+                        layer: "gmlayer",
+                        stroke_width: 2,
+                        width: controlTok.get("width"),
+                        height: controlTok.get("height"),
+                        left: controlTok.get("left"),
+                        top: controlTok.get("top"),
+                    });
+                    //log(JSON.parse(path.get("path")));
+                    //log(path.get("id"));
+                    
+                    if (path) {
+                        toFront(controlTok);
+                        
+                        //create a link between the source token and the darkness path (stored in state object)
+                        
+                        let newLink = makeAoELink(oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'));
+                        
+                        //sendChat(scriptName,`/w "${who}" `+ 'Darkness created on Dynamic Lighting layer');
+                    } else {
+                        sendChat(scriptName,`/w "${who}" `+ 'Unknown error. createObj failed. AoE path not created.');
+                        return;
+                    }
+                    log('State after Spawned object')
+                    log(state[scriptName]);
+                });
+                
+                
+            }
+        } 
+        catch(err) {
+          sendChat(scriptName,`/w "${who}" `+ 'Unhandled exception: ' + err.message);
+        }
+    };
+    
+    const registerEventHandlers = function() {
+        on('chat:message', smartAoE_handleInput);
+        on('change:graphic', smartAoE_handleTokenChange);
+        on('destroy:graphic', smartAoE_handleRemoveToken);
+        //on('destroy:path', smartAoE_handleRemovePath);
+    };
+
+    on("ready",() => {
+        checkInstall();
+        registerEventHandlers();
+    });
+})();
