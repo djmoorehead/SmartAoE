@@ -1,0 +1,1369 @@
+const SmartAoE = (() => {
+    const scriptName = "SmartAoE";
+    const version = '0.0';
+    const schemaVersion = '0.1';
+    const byTOKEN = 'TOKEN';
+    const byPATH = 'PATH';
+    const clearTOKEN = 'TOKEN';
+    const clearALL = 'ALL';
+    const CONTROL_TOK_NAME = 'AOEControlToken'
+    
+    const pt = function(x,y) {
+        this.x = x;
+        this.y = y;
+    };
+    
+    const checkInstall = function() {
+        log(scriptName + ' v' + version + ' initialized.');
+        
+        delete state[scriptName];
+        
+        if( ! _.has(state, scriptName) || state[scriptName].version !== schemaVersion) {
+            log('  > Updating Schema to v'+schemaVersion+' <');
+            switch(state[scriptName] && state[scriptName].version) {
+                case 0.1:
+                /* falls through */
+                case 'UpdateSchemaVersion':
+                    state[scriptName].version = schemaVersion;
+                    break;
+
+                default:
+                    state[scriptName] = {
+                        version: schemaVersion,
+                        links: []
+                    };
+                    break;
+            }
+        }
+        log(state[scriptName]);
+    };
+    
+    const clearCache = function(who, tokID=undefined, pageID=undefined) {
+        //no arguments passed, clear all pinked pairs in ENTIRE CAMPAIGN
+        if(!tokID && !pageID) {
+            state[scriptName] = {
+                version: schemaVersion,
+                links: []
+            };
+            //if (!silent) {
+                sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked!');
+            //}
+            return;
+        }
+        
+        //token only
+        if (tokID) {
+            //iterate through linked pairs in state object to find pairs associated with tokID
+            for (let i = state[scriptName].links.length-1; i>-1; i--) {
+                if (state[scriptName].links[i].tokID === tokID) {
+                    //remove linked pair ids from state object
+                    state[scriptName].links.splice(i,1);
+                    sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked for tokID = ' + tokID);
+                }
+            }
+        } 
+        
+        //all linked tokens in current page
+        if (pageID) {
+            //iterate through linked pairs in state object to find pairs associated with pageID
+            for (let i = state[scriptName].links.length-1; i>-1; i--) {
+                if (state[scriptName].links[i].pageID === pageID) {
+                    //remove linked pair ids from state object
+                    state[scriptName].links.splice(i,1);
+                }
+            }
+            sendChat(scriptName,`/w "${who}" `+ 'SmartAoE paths unlinked for all tokens in pageID = ' + pageID);
+        } 
+        //log(state[scriptName]);
+    }
+    
+    const updateAoELink = function(index, pathIDs) {
+        //clear old paths from memory
+        //log('updating AoELink, index=' + index);
+        //log('new pathIDs = next');
+        //log(pathIDs);
+        //log('state before update');
+        //log(state[scriptName]);
+        state[scriptName].links[index].pathIDs = [];
+        state[scriptName].links[index].pathIDs = pathIDs.map((x) => x);
+        //log('state after update');
+        //log(state[scriptName]);
+    }
+    
+    const makeAoELink = function(aoeType, originTokID, controlTokID, pathIDs, pageID) {
+        //log(originTokID + ',' + controlTokID + ',' + pathIDs + ',' + pageID);
+        let pathArr = [];
+        pathArr.push(pathIDs);
+        let link =  {
+            //tokName: state[scriptName].links.length.toString(),
+            aoeType: aoeType,
+            originTokID: originTokID,
+            controlTokID: controlTokID,
+            pathIDs: pathArr,
+            pageID: pageID
+        };
+        
+        state[scriptName].links.push(link);
+        return link;
+    }
+    
+    //Return object containing arrays of {[linkObj], [indices]} from state object, given tokenID or pathID based on searchType. Returns undefined if none found. 
+    const getAoELinks = function(ID) {
+        let linkObjs = [];
+        let indices = [];
+        
+        log('finding link for tokID = ' + ID);
+        state[scriptName].links.forEach((link, index) => {
+            if (link.controlTokID === ID || link.originTokID === ID) {
+                linkObjs.push(link);
+                indices.push(index);
+            }
+        });
+        
+        /*
+        let link = state[scriptName].links.filter(function (p) {
+            if (searchType === byTOKEN) {
+                return (p.controlTokID === ID || p.originTokID === ID);
+            //} else {
+            //    return p.pathID === ID;
+            }
+        });
+        */
+        
+        if (linkObjs.length>0) {
+            let retVal = {
+                links: linkObjs,
+                indices: indices
+            }
+            return retVal;
+        } else {
+            return undefined;
+        }
+    }
+    
+    const spawnTokenAtXY =  function(who, tokenJSON, pageID, spawnX, spawnY, sizeX, sizeY, controlledby) {
+        let spawnObj;
+        let imgsrc;
+        
+        try {
+            let baseObj = JSON.parse(tokenJSON);
+            
+            //set token properties
+            baseObj.pageid = pageID;
+            baseObj.left = spawnX;
+            baseObj.top = spawnY;
+            baseObj.width = sizeX;
+            baseObj.height = sizeY;
+            baseObj.controlledby = controlledby;
+            
+            baseObj.imgsrc = getCleanImgsrc(baseObj.imgsrc); //ensure that we're using the thumb.png
+            
+            //image must exist in personal Roll20 image library 
+            if (baseObj.imgsrc ===undefined) {
+                sendChat(scriptName,`/w "${who}" `+ 'Unable to find imgsrc for default token of \(' + baseObj.name + '\)' + "<br>" + 'You must use an image file that has been uploaded to your Roll20 Library.')
+                return;
+            }
+            
+            //Spawn the Token!
+            //controlTok = createObj('graphic',baseObj);
+            
+            
+            return new Promise(resolve => {
+                controlTok = createObj('graphic',baseObj);
+                resolve(controlTok);
+            });
+            
+        }
+        catch(err) {
+          sendChat('SmartAoE',`/w "${who}" `+ 'Unhandled exception: ' + err.message)
+        }
+    };
+    
+    const buildSquare = function(rad) {
+        let ptUL = new pt(0,0);
+        let ptUR = new pt(2*rad,0);
+        let ptLR = new pt(2*rad,2*rad);
+        let ptLL = new pt(0,2*rad);
+        
+        //Full square
+        //squarePoints = `[[\"M\",0,0],[\"L\",0,${2*rad}],[\"L\",${2*rad},${2*rad}],[\"L\",${2*rad},0],[\"L\",0,0]]`;
+        let squarePointsJSON = `[[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUR.x},${ptUR.y}],[\"L\",${ptLR.x},${ptLR.y}],[\"L\",${ptLL.x},${ptLL.y}],[\"L\",${ptUL.x},${ptUL.y}]]`;
+        
+        //log(squarePointsJSON);
+        return squarePointsJSON;
+    };
+    
+    const buildCircle = function(rad, coneWidth, coneDirection) {
+        let circlePoints;
+        let steps, stepSize;
+        let deg2rad = Math.PI/180;
+        
+        steps = Math.min(Math.max(Math.round( (Math.PI*2*Math.sqrt((2*rad*rad)/2))/35),4),20);
+        
+        const at = (theta) => ({x: Math.cos(theta)*rad, y: Math.sin(theta)*rad}); 
+        
+        if (coneWidth === 360) { 
+            //Build a full circle
+            stepSize = Math.PI/(2*steps);
+            
+            let acc=[[],[],[],[]];
+            let th=0;
+            _.times(steps+1,()=>{
+                let pt=at(th);
+                acc[0].push([pt.x,pt.y]);
+                acc[1].push([-pt.x,pt.y]);
+                acc[2].push([-pt.x,-pt.y]);
+                acc[3].push([pt.x,-pt.y]);
+                th+=stepSize;
+            });
+            acc = acc[0].concat(
+                acc[1].reverse().slice(1),
+                acc[2].slice(1),
+                acc[3].reverse().slice(1)
+            );
+            
+            //Some js wizardry from TheAaron with the array map function. I couldn't make it work without returning the outer (1st & last) square brackets
+            //So, we will take this string, strip the last "]", then append the grid points to the path
+            circlePoints = JSON.stringify(acc.map((v,i)=>([(i?'L':'M'),rad+v[0],rad+v[1]])));
+            circlePoints = circlePoints.substring(0, circlePoints.length - 1);
+        } else {
+            //build a cone instead
+            steps = 50;
+            stepSize = deg2rad * (coneWidth/(steps));
+            
+            let oX = oY = rad;
+            let x, y;
+            let startAngle = deg2rad * (coneDirection - coneWidth/2);
+            let endAngle = deg2rad * (coneDirection + coneWidth/2);
+            let ptUL = new pt(0,0);
+            let ptUR = new pt(2*rad,0);
+            let ptLR = new pt(2*rad,2*rad);
+            let ptLL = new pt(0,2*rad);
+            
+            //start path at the origin pt 
+            circlePoints = `[[\"M\",${oX},${oY}],`;
+            
+            //for loop takes into account cumulative floating point precision error
+            for (let th=startAngle; th<endAngle+Number.EPSILON*steps; th+=stepSize) {
+                //change in "normal" polar coord conversion due to 0deg being straight up and positive Y being "down"
+                x = oX + oX * Math.sin(th);
+                y = oY + oY * Math.cos(th + deg2rad*180);
+                circlePoints = circlePoints + `[\"L\",${x},${y}],`
+            }
+            
+            //connect back to the origin pt
+            circlePoints = circlePoints + `[\"L\",${oX},${oY}],`;
+            //add "phantom" single points to path corresponding to the four corners to keep the size computations correct
+            circlePoints = circlePoints + `[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUL.x},${ptUL.y}],[\"M\",${ptUR.x},${ptUR.y}],[\"L\",${ptUR.x},${ptUR.y}],[\"M\",${ptLR.x},${ptLR.y}],[\"L\",${ptLR.x},${ptLR.y}],[\"M\",${ptLL.x},${ptLL.y}],[\"L\",${ptLL.x},${ptLL.y}],[\"M\",${ptUL.x},${ptUL.y}],[\"L\",${ptUL.x},${ptUL.y}]`;
+        }
+        
+        //return  the path JSON
+        return circlePoints + "]";
+    };
+    
+    async function deleteLinkedPaths (pathIDs) {
+        //delete the linked paths and clear the pathIDs array from the state object
+        //log('entered deleteLinkedPaths function')
+        //log(pathIDs);
+        log(pathIDs.length);
+        pathIDs.forEach((pathID) => {
+            //log('this pathID = ' + pathID)
+            path = getObj('path',pathID);
+            if (path) {
+                //log('removing path ' + pathID);
+                path.remove();
+                path = getObj('path',pathID);
+                //log(path);
+            }  
+        });
+        /*
+        state[scriptName].links[index].pathIDs.forEach((pathID) => {
+          path = getObj('path',pathID);
+            if (path) {
+                path.remove();
+            }  
+        });
+        //state[scriptName].links[index].pathIDs = [];
+        return new Promise(resolve => {
+            log('delete done');
+            resolve('done');
+        });
+        */
+        //log(state[scriptName]);
+    }
+    
+    const createPath = function(pathstring, pageID, layer, fillColor, strokeColor, strokeWidth, height, width, left, top) {
+        //let promise = new Promise(resolve => {
+            //log('about to create path');
+            
+                let path = createObj("path", {                
+                    pageid: pageID,
+                    path: pathstring,
+                    fill: fillColor,
+                    stroke: strokeColor,
+                    layer: layer,
+                    stroke_width: strokeWidth,
+                    width: width,
+                    height: height,
+                    left: left,
+                    top: top
+                });
+                return path
+                
+                //resolve(path);
+            
+        //});
+        
+        /*
+        result = await promise;
+        log(result);
+        return result;
+        */
+    }
+    
+    //not needed?
+    const normalizeTo360deg = function(deg) {
+        deg = deg % 360;
+        if (deg < 0) {deg += 360;}
+        return deg;
+    }
+    
+    const getAngle2ControlToken = function(oPt, cPt) {
+        let deg2rad = Math.PI/180;
+        let cAngle;     //return value (angle from originPt to controlPt)
+        
+        let dX = Math.abs(cPt.x - oPt.x);
+        let dY = Math.abs(cPt.y - oPt.y);
+        let smallAngle = Math.atan(dY / dX);    //this does not take into account the quadrant in which the angle lies. More tests req'd to determine correct relative angle 
+        
+        if (cPt.x < oPt.x && cPt.y < oPt.y) { //UL quadrant
+            cAngle = 270*deg2rad + smallAngle;
+        } else if (cPt.x > oPt.x && cPt.y < oPt.y) { //UR quadrant
+            cAngle = 90*deg2rad - smallAngle;
+        } else if (cPt.x > oPt.x && cPt.y > oPt.y) { //LR quadrant
+            cAngle = 90*deg2rad + smallAngle;
+        } else if (cPt.x < oPt.x && cPt.y > oPt.y) { //LL quadrant
+            cAngle = 270*deg2rad - smallAngle;
+        } else if (cPt.x === oPt.x && cPt.y < oPt.y) { //straight up
+            cAngle = 0*deg2rad;
+        } else if (cPt.x > oPt.x && cPt.y === oPt.y) { //straight right
+            cAngle = 90*deg2rad;
+        } else if (cPt.x === oPt.x && cPt.y > oPt.y) { //straight down
+            cAngle = 180*deg2rad;
+        } else if (cPt.x < oPt.x && cPt.y === oPt.y) { //straight left
+            cAngle = 270*deg2rad;
+        }
+        
+        return cAngle/deg2rad;  //angle expressed in degrees
+        
+    }
+    
+    const convertPtPixels2Units = function(Pt, pageGridIncrement) {
+        let newX = Pt.x / (70 * pageGridIncrement);
+        let newY = Pt.y / (70 * pageGridIncrement);
+        
+        let PtInUnits = new pt(newX, newY);
+        return PtInUnits
+    }
+    
+    const convertLocationsArrUnits2Pixels = function(obj, pageGridIncrement) {
+        let newX = obj.xVals.map(val => val * 70 * pageGridIncrement)
+        let newY = obj.yVals.map(val => val * 70 * pageGridIncrement)
+        return {xVals: newX, yVals: newY};
+    }
+    
+    const getLineLocations = function (x1, y1, x2, y2) {
+        let LineCoords = {
+            xVals: [],
+            yVals: []
+        }
+        // Iterators, counters required by algorithm
+        let x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
+        // Calculate line deltas
+        dx = x2 - x1;
+        dy = y2 - y1;
+        // Create a positive copy of deltas (makes iterating easier)
+        dx1 = Math.abs(dx);
+        dy1 = Math.abs(dy);
+        // Calculate error intervals for both axis
+        px = 2 * dy1 - dx1;
+        py = 2 * dx1 - dy1;
+        // The line is X-axis dominant
+        if (dy1 <= dx1) {
+            // Line is drawn left to right
+            if (dx >= 0) {
+                x = x1; y = y1; xe = x2;
+            } else { // Line is drawn right to left (swap ends)
+                x = x2; y = y2; xe = x1;
+            }
+            //pixel(x, y); // Draw first pixel
+            LineCoords.xVals.push(x);
+            LineCoords.yVals.push(y);
+            // Rasterize the line
+            for (i = 0; x < xe; i++) {
+                x = x + 1;
+                // Deal with octants...
+                if (px < 0) {
+                    px = px + 2 * dy1;
+                } else {
+                    if ((dx < 0 && dy < 0) || (dx > 0 && dy > 0)) {
+                        y = y + 1;
+                    } else {
+                        y = y - 1;
+                    }
+                    px = px + 2 * (dy1 - dx1);
+                }
+                // Draw pixel from line span at
+                // currently rasterized position
+                //pixel(x, y);
+                LineCoords.xVals.push(x);
+                LineCoords.yVals.push(y);
+            }
+        } else { // The line is Y-axis dominant
+            // Line is drawn bottom to top
+            if (dy >= 0) {
+                x = x1; y = y1; ye = y2;
+            } else { // Line is drawn top to bottom
+                x = x2; y = y2; ye = y1;
+            }
+            //pixel(x, y); // Draw first pixel
+            LineCoords.xVals.push(x);
+            LineCoords.yVals.push(y);
+            // Rasterize the line
+            for (i = 0; y < ye; i++) {
+                y = y + 1;
+                // Deal with octants...
+                if (py <= 0) {
+                    py = py + 2 * dx1;
+                } else {
+                    if ((dx < 0 && dy<0) || (dx > 0 && dy > 0)) {
+                        x = x + 1;
+                    } else {
+                        x = x - 1;
+                    }
+                    py = py + 2 * (dx1 - dy1);
+                }
+                // Draw pixel from line span at
+                // currently rasterized position
+                LineCoords.xVals.push(x);
+                LineCoords.yVals.push(y);
+            }
+        }
+        LineCoords = convertLocationsArrUnits2Pixels(LineCoords, pageGridIncrement)
+        log('LineCoords follows');
+        log(LineCoords);
+        return LineCoords;
+    }
+    
+    
+    const distBetweenPts = function(pt1, pt2, calcType='Euclidean', gridIncrement=-999, scaleNumber=-999) {
+        let distPx;     //distance in Pixels
+        let distUnits;  //distance in units (gridded maps only)
+        if ( (calcType === 'PF' || calcType === '5e') && gridIncrement !== -999 & scaleNumber !== -999) {
+            //using 'Pathfinder' or '3.5e' distance rules, where every other diagonal unit counts as 1.5 units. 
+            //..or using 5e diagonal rules where each diag only counts 1 square. 
+            //..5e is special due to how t is constructed. We use Euclidean distance to determine if in cone, but we can display in 5e units. 
+                //Only compatible with gridded maps
+                //convert from pixels to units, do the funky pathfinder math, then convert back to pixels
+            let dX = (Math.abs(pt1.x - pt2.x) * scaleNumber / 70) / gridIncrement;
+            let dY = (Math.abs(pt1.y - pt2.y) * scaleNumber / 70) / gridIncrement;
+            let maxDelta = Math.max(dX,dY);
+            let minDelta = Math.min(dX, dY);
+            let minFloor1pt5Delta;
+            if (calcType === '5e') {
+                //diagonals count as one square
+                minFloor1pt5Delta = Math.floor(1.0 * minDelta);
+            } else if (calcType === 'PF') {
+                //every other diagonal counts as 1.5 squares
+                minFloor1pt5Delta = Math.floor(1.5 * minDelta);
+            }
+            
+            
+            //log(pt1);
+            //log(pt2);
+            //log('gridIncrement = ' + gridIncrement);
+            //log('scaleNumber = ' + scaleNumber);
+            //log('dX = ' + dX);
+            //log('dY = ' + dY);
+            //log('maxDelta = ' + maxDelta);
+            //log('MinDelta = ' + minDelta);
+            //log('minFloor1pt5Delta = ' + minFloor1pt5Delta);
+            //let temp = maxDelta - minDelta + minFloor1pt5Delta;
+            //log('distU = ' + temp);
+            
+            
+            //convert dist back to pixels
+            distUnits = Math.floor( (maxDelta-minDelta + minFloor1pt5Delta) / scaleNumber ) * scaleNumber
+            distPx = distUnits * 70 * gridIncrement / scaleNumber; 
+            //floor( ( maxDelta-minDelta + minFloor1pt5Delta ) /5  )*5
+            
+            //log('distP = ' + distPx);
+            
+            //  [[ floor((([[{abs((@{position-x}-@{target|Target|position-x})*5/70),abs((@{position-y}-@{target|Target|position-y})*5/70)}kh1]]-
+            //  [[{abs((@{position-x}-@{target|Target|position-x})*5/70),abs((@{position-y}-@{target|Target|position-y})*5/70)}kl1]])+
+            //  floor(1.5*([[{abs((@{position-x}-@{target|Target|position-x})*5/70),abs((@{position-y}-@{target|Target|position-y})*5/70)}kl1]])))/5)*5]]
+            
+        } else {
+            //default Pythagorean theorem
+            distPx = Math.sqrt( Math.pow(pt1.x - pt2.x, 2) + Math.pow(pt1.y - pt2.y, 2) );
+        }
+        
+        return distPx;
+    }
+    
+    /*
+    const distBetweenPts = function(pt1, pt2) {
+        let dist = Math.sqrt( Math.pow(pt1.x - pt2.x, 2) + Math.pow(pt1.y - pt2.y, 2) );
+    }
+    */
+    
+    
+    function calcPolygonArea(vertices) {
+        //vertices is an array of pts
+        //NOTE: vertices must be in clockwise or counter-clockwise order for this to work!!!
+        let total = 0;
+        
+        for (let i = 0, l = vertices.length; i < l; i++) {
+            let addX = vertices[i].x;
+            let addY = vertices[i == vertices.length - 1 ? 0 : i + 1].y;
+            let subX = vertices[i == vertices.length - 1 ? 0 : i + 1].x;
+            let subY = vertices[i].y;
+            
+            total += (addX * addY * 0.5);
+            total -= (subX * subY * 0.5);
+        }
+        
+        return Math.abs(total);
+    }
+    
+     const isPointInCone = function(pt, oPt, rad, coneDirection, coneWidth, isFlatCone, calcType='Euclidean', gridIncrement=-999, scaleNumber=-999) {
+        let deg2rad = Math.PI/180;
+        let pAngle;     //the angle between the cone origin and the test pt
+        let smallAngle;
+        let startAngle = deg2rad * normalizeTo360deg(coneDirection - coneWidth/2);
+        let endAngle = deg2rad * normalizeTo360deg(coneDirection + coneWidth/2);
+        let centerAngle = deg2rad * normalizeTo360deg(coneDirection);
+        let halfConeWidth = deg2rad * (coneWidth/2);
+        let criticalDist;
+        
+        // Calculate polar co-ordinates
+        let polarRadius;
+        if (calcType == 'PF' && gridIncrement !== -999 & scaleNumber !== -999) {
+            polarRadius = distBetweenPts(oPt, pt, calcType, gridIncrement, scaleNumber)
+        } else {
+            polarRadius = distBetweenPts(oPt, pt)
+        }
+        
+        let dX = Math.abs(pt.x - oPt.x);
+        let dY = Math.abs(pt.y - oPt.y);
+        
+        //calculate "smallAngle" - this does not take into account the quadrant in which the angle lies. More tests req'd to determine correct relative angle 
+        if (dX===0) {
+            smallAngle = 90*deg2rad;
+        } else {
+            smallAngle = Math.atan(dY / dX);
+        }
+        
+        if (pt.x < oPt.x && pt.y < oPt.y) { //UL quadrant
+            pAngle = 270*deg2rad + smallAngle;
+        } else if (pt.x > oPt.x && pt.y < oPt.y) { //UR quadrant
+            pAngle = 90*deg2rad - smallAngle;
+        } else if (pt.x > oPt.x && pt.y > oPt.y) { //LR quadrant
+            pAngle = 90*deg2rad + smallAngle;
+        } else if (pt.x < oPt.x && pt.y > oPt.y) { //LL quadrant
+            pAngle = 270*deg2rad - smallAngle;
+        } else if (pt.x === oPt.x && pt.y < oPt.y) { //straight up
+            pAngle = 0*deg2rad;
+        } else if (pt.x > oPt.x && pt.y === oPt.y) { //straight right
+            pAngle = 90*deg2rad;
+        } else if (pt.x === oPt.x && pt.y > oPt.y) { //straight down
+            pAngle = 180*deg2rad;
+        } else if (pt.x < oPt.x && pt.y === oPt.y) { //straight left
+            pAngle = 270*deg2rad;
+        }
+        
+        //2nd test angle: Add 360deg to pAngle (to handle cases where startAngle is a negative value and endAngle is positive)
+        let pAngle360 = pAngle + 360*deg2rad;
+        if (endAngle < startAngle) {
+            endAngle = endAngle + 360*deg2rad;
+        }
+        
+        /*
+        log(pt);
+        log(oPt);
+        log('coneDirection = ' + coneDirection);
+        log('coneWidth = ' + coneWidth);
+        log('range = ' + rad);
+        log('polarRadius = ' + polarRadius);
+        log('startAngle = ' + startAngle/deg2rad);
+        log('endAngle = ' + endAngle/deg2rad);
+        log('smallAngle = ' + smallAngle/deg2rad);
+        log('pAngle = ' + pAngle/deg2rad);
+        log('pAngle360 = ' + pAngle360/deg2rad);
+        */
+        
+        if (isFlatCone) {
+            //for 5e-style cones. Basically a triangle (no rounded outer face)
+            //let z = (rad / (2*Math.sin(Math.atan(0.5)))) - rad;
+            dTheta = Math.abs(pAngle - centerAngle);
+            //criticalDist = ((rad+z)*Math.cos(halfConeWidth)) / Math.cos(dTheta);
+            criticalDist = rad / Math.cos(dTheta);
+        } else {
+            //compare to full radius cone
+            criticalDist = rad
+        }
+        //log('criticalDist = ' + criticalDist);
+        
+        //test pAngle and pAngle360 against start/end Angles
+        if ( (pAngle >= startAngle) && (pAngle <= endAngle) && (polarRadius <= criticalDist) || 
+                (pAngle360 >= startAngle) && (pAngle360 <= endAngle) && (polarRadius <= criticalDist) ) {
+           return true;
+        } else {
+            return false;
+        }
+    }
+    
+    
+    // Returns intersection of two line segments.
+    const getIntersectionPt = function(p0_x, p0_y, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y) {
+        let s1_x = p1_x - p0_x;
+        let s1_y = p1_y - p0_y;
+        let s2_x = p3_x - p2_x;
+        let s2_y = p3_y - p2_y;
+        
+        let s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
+        let t = (s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
+        
+        if (s >= 0 && s <= 1 && t >= 0 && t <= 1) { 
+            // intersection at one point
+            let intX = p0_x + (t * s1_x);
+            let intY = p0_y + (t * s1_y);
+            return new pt(intX, intY);
+        //} else if (s1_x===0 & s2_x===0 & ((p0_y<=p2_y & p2_y<=p1_y) || (p1_y<=p2_y & p2_y<=p0_y) || (p0_y<=p3_y & p3_y<=p1_y) || (p1_y<=p3_y & p3_y<=p0_y))) {
+        //    // overlapping vertical lines
+        //    return 'V_edge'
+        //} else if (s1_y===0 & s2_y===0 & ((p0_x<=p2_x & p2_x<=p1_x) || (p1_x<=p2_x & p2_x<=p0_x) || (p0_x<=p3_x & p3_x<=p1_x) || (p1_x<=p3_x & p3_x<=p0_x))) {
+        //    // overlapping horizontal lines
+        //    return 'H_edge'
+        } else {
+            // No intersection
+            return null; 
+        }
+    }
+    
+    const getSlicedSquarePolygon = function(oPt, i, j, pageGridIncrement) {
+        let vertices = []
+        let ptUL = new pt(i-35*pageGridIncrement, j-35*pageGridIncrement);
+        let ptUR = new pt(i+35*pageGridIncrement, j-35*pageGridIncrement);
+        let ptLR = new pt(i+35*pageGridIncrement, j+35*pageGridIncrement);
+        let ptLL = new pt(i-35*pageGridIncrement, j+35*pageGridIncrement);
+        
+        let count = 0;
+        //go clockwise, check each edge of square for intersection with lines defined by cone angles passed to this function
+        let upperIntersection = getIntersectionPt(ptUL.X, ptUL.y, ptUR.x, ptUR.y, oPt.x, oPt.y, i, j);
+        if (upperIntersection) {
+            vertices.push(ptUL, upperIntersection, ptUR);
+            count +=1;
+        }
+        
+        let rightIntersection = getIntersectionPt(ptUR.X, ptUR.y, ptLR.x, ptLR.y, oPt.x, oPt.y, i, j);
+        if (rightIntersection) {
+            if (count > 0 && upperIntersection) {
+                vertices.push(rightIntersection, ptLR);
+            } else {
+                vertices.push(ptUR, rightIntersection, ptLR);
+            }
+            count +=1;
+        }
+        if (count===2) { return vertices }
+        
+        let bottomIntersection = getIntersectionPt(ptLR.X, ptLR.y, ptLL.x, ptLL.y, oPt.x, oPt.y, i, j);
+        if (bottomIntersection) {
+            if (count > 0 && rightIntersection) {
+                vertices.push(bottomIntersection, ptLL);
+            } else {
+                vertices.push(ptLR, bottomIntersection, ptLL);
+            }
+            count +=1;
+        }
+        if (count===2) { return vertices }
+        
+        let leftIntersection = getIntersectionPt(ptLL.X, ptLL.y, ptUL.x, ptUL.y, oPt.x, oPt.y, i, j);
+        if (bottomIntersection) {
+            if (count > 0 && leftIntersection) {
+                vertices.push(bottomIntersection, ptUL);
+            } else {
+                vertices.push(ptLL, bottomIntersection, ptUL);
+            }
+            count +=1;
+        }
+        return vertices;
+    }
+    
+    const getConeLocations = function(aoeType, oPt, cPt, coneDirection, coneWidth, rad, pageGridIncrement) {
+        let coneCoords = {
+            xVals: [],
+            yVals: []
+        }
+        
+        //Process => if center of grid square is in cone, add to output. 
+        //Otherwise, base on the area of the square covered by the cone. 
+            //-> get intersection points of line & sq, then call calcPolygonArea and compare area to threshold
+        
+        //loop through x&y coords of grid square centers near the origin. Bounding box determined by the radius of the cone
+        let minArea = 0.33; //temp hardcode
+        for (i=oPt.x-rad; i<=oPt.x+rad; i=i+70*pageGridIncrement) {
+            for (j=oPt.y-rad; j<=oPt.y+rad; j=j+70*pageGridIncrement) {
+                let centerPt = new pt(i,j);
+                let centerInCone = isPointInCone(centerPt, oPt, rad, coneDirection, coneWidth, true)
+                if (centerInCone) {
+                    coneCoords.xVals.push(i);
+                    coneCoords.yVals.push(j);
+                } else {
+                    //possible edge case, look for intersections of the outer cone vectors with squares and compare coverage areas
+                    let polygonPts = getSlicedSquarePolygon(oPt, i, j, pageGridIncrement);
+                    if (polygonPts.length > 4) {    //intersection will have at least 5 pts (3pts for adjacent sides of square with 2 intersection pts)
+                        //found intersection, calculate area and compare to threshold
+                        let area = calcPolygonArea(polygonPts);
+                        if (area >= minArea) {
+                            coneCoords.xVals.push(i);
+                            coneCoords.yVals.push(j);
+                        }
+                    }
+                }
+                
+            }
+        }
+        /*
+        for each x between oX - r and oX + r) do
+            for each y between oY - r and oY + r) do
+                d = sqrt((oX - x)^2 + (oY - y)^2)
+                if d > r then
+                    continue
+                end
+    
+                d = acos((x - oX) / d)
+                if d >= angle1 and d <= angle2 then
+                    add (x, y) to output
+                end
+            end
+        end
+        */
+        return coneCoords
+    }
+    
+    //pageID, originPt, controlPt, aoeType
+    const getPathLocations = function(link, oTok, cTok) {
+        let locationsArr;       //return value - array of pts (x & y)
+        let dX, dY;             //used in Bresenham algorithm
+        let coneDirection = 0;   //angle (in degrees) between originPt & controlPt
+        let rad = 0;            //radius of effect in pixels
+        
+        /*
+        if (pageGridIncrement !== 0) {  //grid map
+            if (convertRange === "u") {
+                range = range * 70 * pageGridIncrement;                 //convert from "u" to pixels
+            } else {
+                range = (range * 70 * pageGridIncrement) / pageScaleNumber; //convert from page units to pixels
+            }
+        }
+        */
+        
+        let originPtPx = new pt(oTok.get('left'), oTok.get('top'))
+        let controlPtPx = new pt(cTok.get('left'), cTok.get('top'))
+        
+        let page = getObj("page", link.pageID);
+        if (page) {
+            //pageScaleNumber = page.get("scale_number");
+            //pageScaleUnits = page.get("scale_units");
+            pageGridIncrement = page.get("snapping_increment");
+            pageWidth = page.get("width");  //in units
+            pageHeight = page.get("height");  //in units
+            
+            let originPtU = convertPtPixels2Units(originPtPx, pageGridIncrement);
+            let controlPtU = convertPtPixels2Units(controlPtPx, pageGridIncrement);
+            
+            //add error handling.
+            //if (pageGridIncrement !== 0) {  //grid map
+            //etc..
+            
+            switch (link.aoeType) {
+                case '5econe':
+                    coneDirection = getAngle2ControlToken(originPtPx, controlPtPx);
+                    rad = distBetweenPts(originPtPx, controlPtPx);
+                    let coneWidth = 53.14;  //hardcode
+                    //use pt in pixels for cones (higher resolution needed)
+                    locationsArr = getConeLocations(link.aoeType, originPtPx, controlPtPx, coneDirection, coneWidth, rad, pageGridIncrement)
+                    break;
+                case 'line':
+                    //pass through. 'line' is the default
+                default:
+                    locationsArr = getLineLocations(originPtU.x, originPtU.y, controlPtU.x, controlPtU.y)
+                    break;    
+            }
+            
+            return locationsArr;
+        }
+    }
+    
+    //Move DL path to remain under source token
+    async function smartAoE_handleTokenChange (obj,prev) {
+        //find all paths linked to token, returns an array of aoeLinks objects or undefined
+                //aoeLinks object looks like {links:[{aoeType, originTokID, controlTokID, pathIDs[], pageID}], indices:[]}
+        //let path;
+        let pathLocations;
+        let newPaths = [];
+        let aoeLinks = getAoELinks(obj.get('id'));
+        //log('aoeLinks = next line')
+        //log(aoeLinks);
+        
+        if (aoeLinks && obj && prev) {
+            
+            //delete the linked paths and clear the pathIDs array from the state object
+            
+            //do for each matching link in state object 
+            for (a=0; a<aoeLinks.indices.length; a++) {
+                newPaths = [];
+                log('a = ' + a);
+              
+                
+               	//generate new paths based on aoeType and current posiitons or originTok and controlTok
+                let oTok = getObj("graphic", aoeLinks.links[a].originTokID);
+                //log('oTok');
+                //log(oTok);
+                let cTok = getObj("graphic", aoeLinks.links[a].controlTokID);
+                let height = cTok.get("height");
+                let width = cTok.get("width");
+                
+                //let originPt = new pt(oTok.get('left'), oTok.get('top'))
+                //let controlPt = new pt(cTok.get('left'), cTok.get('top'))
+                //let newX = (originPt.x + controlPt.x) / 2;
+                //let newY = (originPt.y + controlPt.y) / 2;
+                let pageID = aoeLinks.links[a].pageID
+                let page = getObj("page", pageID);
+                let pageGridIncrement = page.get("snapping_increment");
+                
+                //physically delete existing paths
+                //deleteLinkedPaths(aoeLinks.links[index].pathIDs);
+                aoeLinks.links[a].pathIDs.forEach((pathID) => {
+                    //log('this pathID = ' + pathID)
+                    let thisPath = getObj('path',pathID);
+                    //log(thisPath);
+                    if (thisPath) {
+                        //log('removing path ' + pathID);
+                        thisPath.remove();
+                        thisPath = getObj('path',pathID);
+                        //log(thisPath);
+                    }  
+                });
+                
+                //let aoeType = 'line';   //temp hardcode
+                //aoeType = '5econe';   //temp hardcode
+                //pathLocations = getPathLocations(pageID, originPt, controlPt, aoeLinks.links[i].aoeType);
+                pathLocations = getPathLocations(aoeLinks.links[a], oTok, cTok);
+                log('pathLocations follows');
+                log(pathLocations);
+                //return
+                
+                let path;
+                let pathstring;
+                //let allPaths = createAllPaths(pathLocations, pageID, pageGridIncrement, height, width).then(
+                //                                    let updatedLink = updateAoELink(aoeLinks.indices[i], newPaths))
+                
+                
+                for (let p=0; p<pathLocations.xVals.length; p++) {
+                    pathstring = buildSquare(35*pageGridIncrement);
+                    path = await new Promise(function(resolve){
+                        let thePath = createPath(pathstring, pageID, 'gmlayer', '#ff000050', '#000000', 2, height, width, pathLocations.xVals[p], pathLocations.yVals[p]);
+                        resolve(thePath);
+                    });
+                    newPaths.push(path.get('_id'));
+                }
+                
+                //log('aoeLinks, newPaths, state before update');
+                //log(aoeLinks);
+                //log(newPaths);
+                //log(state[scriptName])
+                //log(a);
+                //log('aoeLinks.indices[a] = ' + aoeLinks.indices[a]);
+                
+                let updatedLink = updateAoELink(aoeLinks.indices[a], newPaths);
+                
+                
+                
+                /*
+                //make new path
+                let pathstring = buildSquare(35);
+                //log(pathstring);
+                
+                //let path = createPath(pathstring, pageID, layer, fillColor, strokeColor, strokeWidth, height, width, left, top)
+                
+                log('gonna make a path for aoeLinks,index=' + aoeLinks.indices[0]);
+                let path;
+                //if (aoeLinks.indices[0] % 2 ===0) {
+                    //path = createPath(pathstring, pageID, 'gmlayer', '#00ff0050', '#000000', 2, height, width, newX, newY);
+                //} else {
+                    path = createPath(pathstring, pageID, 'gmlayer', '#ff000050', '#000000', 2, height, width, newX, newY);
+                //}
+                //log('path returned from function')
+                //log(path);
+                
+                log('path created, add id to newPaths')
+                newPaths.push(path.get('_id'));
+                log(newPaths)
+                
+            
+                //replace old paths from state object with the new paths 
+                let updatedLink = updateAoELink(aoeLinks.indices[i], newPaths);
+                log('State after iteration = ' + i)
+                log(state[scriptName]);
+                */
+            }
+            
+            
+            
+            
+            
+            //calc delta X & Y
+            //let dX = obj.get('left') - prev['left']
+            //let dY = obj.get('top') - prev['top']
+            //log('token changed: dX, dY= ' + dX + ',' + dY);
+            //move path object(s) based on source token movement
+            
+           
+            /*
+            aoeLinks.links.forEach((link) => {
+                link.pathIDs.forEach((pathID) => {
+                    let path = getObj('path', pathID);
+                    
+                    if (path) {
+                        let newX = parseInt(path.get('left')) + dX;
+                        let newY = parseInt(path.get('top')) + dY;
+                        path.set({left:newX, top:newY});
+                    }
+                });
+            });
+            */
+            
+        } 
+    }
+    
+    const smartAoE_handleRemoveToken = function(obj) {
+        //find all paths linked to token, returns an array of aoeLinks objects or undefined
+                //aoeLinks object looks like {links:[{aoeType originTokID, controlTokID, pathIDs[], pageID}], indices:[]}
+        let tokID = obj['id'];
+        //let tok = getObj("graphic", tokID);
+        //let tokName = tok.get("name")
+        let aoeLinks = getAoELinks(obj.get('id'));
+        log('aoeLinks for remove token');
+        log(aoeLinks);
+        //let path = getObj("path",aoeLinks.links[0].pathIDs[0]);
+        //log(path);
+        //let bgColor = path.get("fill");
+        //log('pathBGcolor = ' + bgColor)
+        if (aoeLinks) {
+            //aoeLinks.indices.forEach((index) => {
+            for (i=aoeLinks.indices.length-1; i>-1; i--) {
+                //delete the linked paths and clear the the associated links arrays from the state object
+                let stateLinkIndex = aoeLinks.indices[i];
+                deleteLinkedPaths(state[scriptName].links[stateLinkIndex].pathIDs);
+                //log('removing link index=' + index);
+                log(state[scriptName])
+                //state[scriptName].links[index] = [];
+                state[scriptName].links.splice(stateLinkIndex, 1)
+                //log(state[scriptName])
+            
+            }    
+            //});
+        }
+        
+        
+        /*
+        //iterate through linked pairs in state object to find pairs associated with tokID
+        for (let i = state[scriptName].links.length-1; i>-1; i--) {
+            if (state[scriptName].links[i].controlTokID === tokID || state[scriptName].links[i].originTokID === tokID) {
+                //get associated path objects and remove if they still exists
+                let path;
+                for (let p = 0; p < state[scriptName].links[i].pathIDs.length; p++) {
+                    path = getObj('path',state[scriptName].links[i].pathIDs[p]);
+                    if (path) {
+                        path.remove();
+                    } else {
+                        //remove linked pair ids from state object (shouldn't ever get called, but here just in case)
+                        state[scriptName].links.splice(i,1);
+                    }
+                }
+                state[scriptName].links.splice(i,1);
+            }
+        }
+        */
+        //log(state[scriptName]);
+    };
+    
+    //returns character object for given name
+    const getCharacterFromName = function (charName) {
+        let character = findObjs({
+            _type: 'character',
+            name: charName
+        }, {caseInsensitive: true})[0];
+        return character;
+    };
+    
+    function processInlinerolls(msg) {
+    	if(_.has(msg,'inlinerolls')){
+    		return _.chain(msg.inlinerolls)
+    		.reduce(function(m,v,k){
+    			var ti=_.reduce(v.results.rolls,function(m2,v2){
+    				if(_.has(v2,'table')){
+    					m2.push(_.reduce(v2.results,function(m3,v3){
+    						m3.push(v3.tableItem.name);
+    						return m3;
+    					},[]).join(', '));
+    				}
+    				return m2;
+    			},[]).join(', ');
+    			m['$[['+k+']]']= (ti.length && ti) || v.results.total || 0;
+    			return m;
+    		},{})
+    		.reduce(function(m,v,k){
+    			return m.replace(k,v);
+    		},msg.content)
+    		.value();
+    	} else {
+    		return msg.content;
+    	}
+    }
+    
+    const parseArgs = function(msg) {
+        msg.content = msg.content
+            .replace(/<br\/>\n/g, ' ')
+            .replace(/(\{\{(.*?)\}\})/g," $2 ")
+        
+        //Check for inline rolls
+        inlineContent = processInlinerolls(msg);
+        
+        let args = inlineContent.split(/\s+--/).map(arg=>{
+                let cmds = arg.split('|');
+                return {
+                    cmd: cmds.shift().toLowerCase().trim(),
+                    params: cmds[0]
+                };
+            });
+        return args;
+    };
+    
+    const smartAoE_handleInput = function(msg) {
+        var who;
+        let tok;
+        let tokID;
+        let pageID;
+        let selected = msg.selected;
+        let range = -999;           //maximum range, in pixels
+        let aoeType = 'line';
+        var controlTok;             //hoist to top so we can set from within a callback function
+        
+        let pathstring;             //JSON string for wavefront paths
+        let pathstring_old;         //JSON string for wavefront paths
+        let polygon = [];           //array containing points of leading animated wavefront
+        let polygon_old = [];       //array containing points of trailing animated wavefront
+        
+        let selectedID;             //selected token
+        let playerID;               //which player called the script. Will determine who gets whispered results 
+        let oTok;                   //origin token
+        let validArgs = "range, wavespacing, wavedelay, wavelife, pinglife, layer, charfilter, tokfilter, title, silent, units, LoS, selectedID, playerID";
+        let convertRange = "";      //will we need to convert range from pixels to "u" or another page-defined distance unit?
+        //var wavetype = 'circle';    //wavefront will either be circular or square
+        let waveIncrement = 35;     //the spacing between waves, in pixels (lower number = slower wavefront)
+        let waveDelay = 50;         //how much time to wait between each wave increment, in ms (higher number = slower wavefront)
+        let waveLife = 200;         //how long each wave wil remain on screen, in ms (higher number = more waves present at any one time)
+        let waveColor = '#ff0000';
+        let tokLife = 2000;         //how long each "RadarPing" token wil remain on screen, in ms 
+        let layers = ['objects', 'gmlayer'];    //the layersin which to look for tokens. Default values are overriden if --layers command is used 
+        let filter = {              //optional filters for which tokens will be actively pinged
+            type: "",               //types include "char" and "tok"
+            attr: "",               //key to filter on. e.g. "npc_type" attribute for a character sheet, or "bar3" for a token filter
+            vals: [],                //array of values for which to filter against filter.attr     e.g. ["celestial", "fiend", "undead"]
+            colors: [],
+            compareType: [],        //possible values: 'contains'(val is somewhere in string), '@'(exact match), '>' or '<' (numeric comparison)
+            ignore: [],             //flag to determine if the value is an ignore filter or a positive match filter
+            anyValueAllowed: false  //this flag will bypass normal checks. Used only for charFilters - The attribute just needs to exist in order for the token to be pinged 
+        }
+        let losBlocks = false;      //Will DL walls block radar sensor if completely obscured (will look at 5 pts per token to determine LoS)
+        let title = "Radar Ping Results";             //title of the default template output
+        let content = "";           //string value that will contain all the row content for default templates
+        let displayOutput = true    //output results via sendChat (default template)
+        var pageScaleNumber = 5;    //distance of one unit
+        var pageScaleUnits = "ft";  //the type of units to use for the scale
+        var pageGridIncrement = 1;  //how many gridlines per 70px
+        let displayUnits = "u";         //output distances in "units" or use pageScaleUnits 
+        let includeTotalDist = false;   //inlude the total range in the output, or just directional (X & Y distances)
+        let hasSight = false;       //Will the RadarPing token grant temporary sight to the 
+        let includeGM = false;      //Send a copy of the ouput to the GM chat if player calls script
+        let seeAnimation = true;
+        
+        let gmToks = [];            //array of all tokens on GM layer
+        let objToks = [];           //array of all tokens on object layer
+        let wallToks = [];          //array of all tokens on walls (DL)  layer
+        let mapToks = [];           //array of all tokens on map layer
+        let allToks = [];           //concatenation of gmToks and allToks
+        let tokIdDist = [];         //array of token(-ish) objects with properties {id, left, right, width, height, and dist to origin}
+        let toksInRange = [];       //subset of allToks, thos ewithin range of origin token
+        let padding = 20;           //ping object will be slightly larger than found tokens, to account for Roll20 zOrder "bug"
+        let radius; 
+        let originX;
+        let originY;
+        let originPt;
+        let controlledby;
+        let retVal = [];                //array of potential error messages to pass back to main smartAoE_handleInput funtion
+        let filterExcludeOnly = false;  //wil be set to true if token filters only include "ignore" tags
+        let useGrid = false;            //default background html setting 
+        let useCircles = false;         //default background html setting
+        let useRadial = false;          //default background html setting
+        let outputGraph = false;        
+        let outputTable = false;
+        let outputCompact = false;       //set to true for single line table output - total distance will not be included in output. 
+        let coneWidth = 360;
+        let coneDirection = 0;
+        let outputLines = [];
+        let groupBy = true;             //if filters are used, group tokens by filter condition in table output
+        let calcType = 'Euclidean';     //Can set to 'PF' to use the 'every-other-diagonal-counts-as-1.5-units' math (only for gridded maps)
+        
+        
+        
+        try {
+            //----------------------------------------------------------------------------
+            //   Optional script operation - clears linked pairs
+            //      e.g.    !smartaoeclear tok    //clears all linked pairs associated with the selected token
+            //              !smartaoeclear page    //clears all linked pairs on current page
+            //              !smartaoeclear campaign    //clears all linked pairs in ENTIRE CAMPAIGN
+            //----------------------------------------------------------------------------
+            /*
+            if(msg.type=="api" && msg.content.toLowerCase().indexOf("!smartaoeclear")==0) {
+                who = getObj('player',msg.playerid).get('_displayname');
+                
+                let cmd = msg.content.split(/\s+/);
+                
+                if (cmd.length > 1) {
+                    
+                    if (msg.selected !== undefined) {
+                        tokID = msg.selected[0]['_id'];
+                        tok = getObj("graphic",tokID);
+                        pageID = tok.get('pageid');
+                    }
+                    
+                    switch(cmd[1].toLowerCase()) {
+                        case 'tok':
+                            if (tokID) {
+                                let clearTok = clearCache(who, tokID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'token':
+                            if (tokID) {
+                                let clearTok = clearCache(who, tokID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'page':
+                            if (tokID) {
+                                let clearTok = clearCache(who, undefined, pageID);
+                            } else {
+                                sendChat(scriptName,`/w "${who}" `+ 'Error. You must select a token to proceed with this command.');
+                                return;
+                            }
+                            break;
+                        case 'campaign':
+                            let clear = clearCache(who);
+                            break;
+                        default:
+                            sendChat(scriptName,`/w "${who}" `+ 'Unknown argument. Format is \"!smartAoEclear tok/page/campaign\"');
+                            break;
+                    }
+                }
+                return;
+            }
+            */
+            
+            //--------------------------------------------------------------------
+            //   Normal script operation
+            //--------------------------------------------------------------------
+            if(msg.type=="api" && msg.content.toLowerCase().indexOf("!smartaoe")==0) {
+                log(msg);
+                //Parse msg into an array of argument objects [{cmd:params}]
+                let args = parseArgs(msg);
+                args.shift();
+                
+                //assign values to our params arrray based on args
+                args.forEach((arg) => {
+                    let option = arg["cmd"].toLowerCase().trim();
+                    let param = arg["params"].trim();
+                    
+                    switch(option) {
+                        case "range":
+                            range = parseFloat(param);
+                            let u = param.match(/[a-z]/i);   //if not an empty string, we will use page settings to convert range to "u" or other map-defined units
+                            if (u !== null) {
+                                convertRange = u[0]
+                            }
+                            break;
+                        case "aoetype":
+                            let w = param.toLowerCase();
+                            if (w.includes('circle')) {
+                                aoeType = 'circle';
+                            } else if (w.includes('sq')) {
+                                aoeType = 'square';
+                            } else if (w.includes('5e')) {
+                                aoeType = '5econe';
+                                coneWidth = 53.14;
+                            } else {    //default
+                                aoeType = 'line';
+                            }
+                            let tempConeParams = param.split(",").map(layer => layer.trim() );
+                            if (tempConeParams.length > 1) {
+                                coneDirection = tempConeParams[1];  //this may be an angle or a tokenID. Later, we will parseFloat or find the angle between selected & target tokens
+                            }
+                            if (tempConeParams.length > 2 && aoeType !== '5e') {
+                                coneWidth = parseFloat(tempConeParams[2]);
+                            }
+                            break;
+                        
+                        default:
+                            retVal.push('Unexpected argument identifier (' + option + '). Choose from: (' + validArgs + ')');
+                            break;    
+                    }
+                }); //end forEach arg
+                
+                who = getObj('player',msg.playerid).get('_displayname');
+                
+                //Token select or ID validation
+                if (selectedID===undefined && msg.selected===undefined) {
+                    sendChat(scriptName,`/w "${who}" `+ 'You must either select a token or pass the tokenID via --selectedID');
+                    return;
+                }
+                //Get the origin token object from either msg or an explicitly defined tokenID
+                if (selectedID===undefined) {
+                    oTok = getObj("graphic",msg.selected[0]._id);
+                } else {
+                    //log(selectedID);
+                    oTok = getObj("graphic",selectedID);
+                }
+                //Set controlledBy property of token to determine who can move the control token. Include all GMs
+                if (playerID===undefined) {
+                    controlledby = msg.playerid;
+                } else {
+                    controlledby = playerID;
+                }
+                
+                //First data validation checkpoint
+                if (retVal.length > 0) {
+                    sendChat(scriptName,`/w "${who}" `+ retVal);
+                    return;
+                };
+                
+                //----------------------------------------------------------------
+                
+                //Get token values and page settings
+                originWidth = oTok.get("width")
+                originHeight = oTok.get("height")
+                originAvgSize = (originWidth+originHeight)/2;
+                radius = originWidth/2;         //starting radius for animated wavefront
+                pageID = oTok.get("pageid");
+                
+                originX = oTok.get("left");
+                originY = oTok.get("top");
+                originPt = new pt(originX, originY);
+                
+                //log('oTok_XY = ' + originX + ', ' + originY);
+                
+                let thePage = getObj("page", pageID);
+                pageScaleNumber = thePage.get("scale_number");
+                pageScaleUnits = thePage.get("scale_units");
+                pageGridIncrement = thePage.get("snapping_increment");
+                pageDL = thePage.get("showlighting") || thePage.get("dynamic_lighting_enabled")
+                
+                //possibly convert the range from user-supplied units to pixels
+                if (convertRange !== "") {
+                    if (pageGridIncrement !== 0) {  //grid map
+                        if (convertRange === "u") {
+                            range = range * 70 * pageGridIncrement;                 //convert from "u" to pixels
+                        } else {
+                            range = (range * 70 * pageGridIncrement) / pageScaleNumber; //convert from page units to pixels
+                        }
+                    } else {                        //gridless map, only use page settings
+                        if (convertRange === "u") {
+                            sendChat(scriptName,`/w "${who}" `+ 'Warning: Units \"u\" selected on a gridless map. Range will be calculated in pixels and will probably be much smaller than expected ');
+                        } else {
+                            range = (range * 70) / pageScaleNumber;
+                        }
+                    }
+                }
+                
+                let spawnObj = getCharacterFromName(CONTROL_TOK_NAME);
+                log(spawnObj);
+                if (spawnObj === undefined) {
+                    sendChat(scriptName,`/w "${who}" Error: Character \"${CONTROL_TOK_NAME}\" must be in the journal with a default token `);
+                    return;
+                }
+                spawnObj.get("_defaulttoken", async function(defaultToken) {
+                    controlTok = await spawnTokenAtXY(who, defaultToken, pageID, originX, originY, originWidth, originHeight, controlledby);
+                    //log(controlTok);
+                    let pathstring = buildSquare(radius);
+                    //log(pathstring);
+                    let path = createPath(pathstring, pageID, 'gmlayer', '#ff000050', '#000000', 2, controlTok.get("height"), controlTok.get("width"), controlTok.get("left"), controlTok.get("top"));
+                    /*
+                    let path = createObj("path", {                
+                        pageid: controlTok.get("pageid"),
+                        path: pathstring,
+                        fill: "#ff000050",
+                        stroke: "#000000",
+                        layer: "gmlayer",
+                        stroke_width: 2,
+                        width: controlTok.get("width"),
+                        height: controlTok.get("height"),
+                        left: controlTok.get("left"),
+                        top: controlTok.get("top"),
+                    });
+                    */
+                    //log(JSON.parse(path.get("path")));
+                    //log(path.get("id"));
+                    
+                    if (path) {
+                        toFront(controlTok);
+                        
+                        //create a link between the source token and the darkness path (stored in state object)
+                        
+                        let newLink = makeAoELink(aoeType, oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'));
+                        
+                        //sendChat(scriptName,`/w "${who}" `+ 'Darkness created on Dynamic Lighting layer');
+                    } else {
+                        sendChat(scriptName,`/w "${who}" `+ 'Unknown error. createObj failed. AoE path not created.');
+                        return;
+                    }
+                    log('State after Spawned object')
+                    log(state[scriptName]);
+                });
+                
+                
+            }
+        } 
+        catch(err) {
+          sendChat(scriptName,`/w "${who}" `+ 'Unhandled exception: ' + err.message);
+        }
+    };
+    
+    const registerEventHandlers = function() {
+        on('chat:message', smartAoE_handleInput);
+        on('change:graphic', smartAoE_handleTokenChange);
+        on('destroy:graphic', smartAoE_handleRemoveToken);
+        //on('destroy:path', smartAoE_handleRemovePath);
+    };
+
+    on("ready",() => {
+        checkInstall();
+        registerEventHandlers();
+    });
+})();
