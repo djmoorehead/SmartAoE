@@ -2640,7 +2640,7 @@ const SmartAoE = (() => {
         on('destroy:graphic', smartAoE_handleRemoveToken);
         //on('destroy:path', smartAoE_handleRemovePath);
     };
-
+ 
     on("ready",() => {
         checkInstall();
         registerEventHandlers();
