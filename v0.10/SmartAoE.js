@@ -2691,11 +2691,13 @@ const SmartAoE = (() => {
         outputNew = outputNew + buildTableBody(allSaveRows, descRow, aoeLink.cardParameters) + '</table></div></div>';
         
         log(outputNew);
-        sendChat(scriptName,'/w gm ' + outputNew);
+        //sendChat(scriptName,'/w gm ' + outputNew);
+        sendChat(scriptName, outputNew);
         
         if (damageMessages.length > 0) {
             autoApplyMsg = '<br>' + damageMessages.join('<br>');
-            sendChat(scriptName,'/w gm ' + autoApplyMsg);
+            //sendChat(scriptName,'/w gm ' + autoApplyMsg);
+            sendChat(scriptName, autoApplyMsg);
         }
     }
     
@@ -2834,7 +2836,8 @@ const SmartAoE = (() => {
                 let token = getObj('graphic', tokenID);
                 if (token) {
                     damageMsg = applyDamage(tokenID, bar, damage);
-                    sendChat(scriptName, `/w gm ${damageMsg}`)
+                    //sendChat(scriptName, `/w gm ${damageMsg}`)
+                    sendChat(scriptName, damageMsg)
                     
                     if (marker) {
                         addStatusMarkers(tokenID, marker); 
@@ -2963,8 +2966,6 @@ const SmartAoE = (() => {
                     _pageid: pageID,                              
                     _type: "graphic"
                 });
-                //log('validToks before filter');
-                //log(validToks);
                 
                 //only grab toks representing characters and on the object or gm layer
                 validToks = validToks.filter(t => {
@@ -3391,4 +3392,3 @@ const SmartAoE = (() => {
         populateTokenMarkerURLs();
     });
 })();
-
