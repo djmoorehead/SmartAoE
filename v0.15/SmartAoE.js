@@ -228,7 +228,7 @@ const SmartAoE = (() => {
         return output;
     }
     
-    const buildSaveRow = function (imageURL, id, layer, name, success, saveInline1, saveInline2, roll2x, hideforumula, dam, autoApply, bar, markerString, RVI, zeroHPmarker, cardParameters) {
+    const buildSaveRow = function (imageURL, id, layer, name, success, saveInline1, saveInline2, roll2x, hideforumula, dam, autoApply, bar, markerString, RVI, zeroHPmarker, removeAtZero, cardParameters) {
         let result;
         let damString = dam.join('/');
         markerString = markerString.replace(/::/g,'%%');
@@ -236,8 +236,9 @@ const SmartAoE = (() => {
         if (markerString === '') { markerString = 'n/a' }
         if (zeroHPmarker === '') { zeroHPmarker = 'n/a' }
         let whisperDamageMsg = (layer === 'gmlayer') ? 'true' : 'false';
+        let removeAtZeroMsg = removeAtZero ? 'true' : 'false';
         
-        let applyDamLink = autoApply ? '' : ` href='!smartapply ${id} ${name} ${bar} ${damString} ${markerString} ${zeroHPmarker} ${whisperDamageMsg}'`;
+        let applyDamLink = autoApply ? '' : ` href='!smartapply ${id} ${name} ${bar} ${damString} ${markerString} ${zeroHPmarker} ${removeAtZeroMsg} ${whisperDamageMsg}'`;
         damString = damString.replace('/', ' / ');
         
         let RVI_output = '';
@@ -626,7 +627,7 @@ const SmartAoE = (() => {
         //log(state[scriptName]);
     }
     
-    const makeAoELink = function(controlTokName, aoeType, coneWidth, aoeFloat, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, originPt, minGridArea, minTokArea, originTokID, controlTokID, pathIDs, pageID, fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttr, vulnerableAttr, immunityAttr, conditionPass, conditionFail, zeroHPmarker, hideNames, cardParameters) {
+    const makeAoELink = function(controlTokName, aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, originPt, minGridArea, minTokArea, originTokID, controlTokID, pathIDs, pageID, fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttr, vulnerableAttr, immunityAttr, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters) {
     //const makeAoELink = function(aoeType, aoeColor, radius, originType, originPt, minGridArea, minTokArea, originTokID, controlTokID, pathIDs, pageID, fxType, saveFormula, saveName, DC) {
         //log(originTokID + ',' + controlTokID + ',' + pathIDs + ',' + pageID);
         let pathArr = [];
@@ -637,6 +638,7 @@ const SmartAoE = (() => {
             aoeType: aoeType,
             coneWidth: coneWidth,
             aoeFloat: aoeFloat,
+            instant: instant,
             forceIntersection: forceIntersection,
             aoeColor: aoeColor,
             aoeOutlineColor: aoeOutlineColor,
@@ -678,6 +680,7 @@ const SmartAoE = (() => {
             conditionPass: conditionPass,
             conditionFail: conditionFail,
             zeroHPmarker: zeroHPmarker,
+            removeAtZero: removeAtZero,
             hideNames: hideNames,
             cardParameters: cardParameters
         };
@@ -3344,14 +3347,17 @@ const SmartAoE = (() => {
         }
     }
     
-    const applyDamage = function(tokID, name, bar, damageArr, zeroHPmarker) {
+    const removeToken = function(tokID) {
+        let tok = getObj('graphic', tokID);
+        
+        if (tok) {
+            tok.remove();
+        }
+    }
+    
+    const applyDamage = function(tokID, name, bar, damageArr, zeroHPmarker, removeAtZero=false) {
         let tok = getObj('graphic', tokID);
         let currentHP = tok.get(`bar${bar}_value`) || 0;
-        //let currentHP = tok.get('bar1_value') || 0;
-        
-        //if (name === '') {
-        //    name = tok.get('name');
-        //}
         
         let damage = damageArr.map(e=>parseInt(e)).reduce((a, b) => (a+b));
         
@@ -3361,7 +3367,11 @@ const SmartAoE = (() => {
             let dummy = addStatusMarkers(tokID, zeroHPmarker);
         }
         
-        tok.set(`bar${bar}_value`, newHP);
+        if (removeAtZero && newHP===0) {
+            let dummy = removeToken(tokID);
+        } else {
+            tok.set(`bar${bar}_value`, newHP);
+        }
         
         return damage>0 ? `Applied ${damage} damage to ${name}` : '';
         
@@ -3559,7 +3569,8 @@ const SmartAoE = (() => {
             }
             
             if (aoeLink.autoApply) {
-                let damMsg = applyDamage(o.id, name, aoeLink.damageBar, thisDamage, aoeLink.zeroHPmarker);
+                
+                let damMsg = applyDamage(o.id, name, aoeLink.damageBar, thisDamage, aoeLink.zeroHPmarker, aoeLink.removeAtZero);
                 if (damMsg !== '') { 
                     if (o.layer === 'gmlayer') {
                         gmDamageMessages.push(damMsg)
@@ -3569,7 +3580,7 @@ const SmartAoE = (() => {
                 };
             }
             
-            return buildSaveRow(o.pic, o.id, o.layer, name, success, o.styled_1, o.styled_2, o.roll2x, false, thisDamage, aoeLink.autoApply, aoeLink.damageBar, thisMarker, RVI_string, aoeLink.zeroHPmarker, aoeLink.cardParameters);
+            return buildSaveRow(o.pic, o.id, o.layer, name, success, o.styled_1, o.styled_2, o.roll2x, false, thisDamage, aoeLink.autoApply, aoeLink.damageBar, thisMarker, RVI_string, aoeLink.zeroHPmarker, aoeLink.removeAtZero, aoeLink.cardParameters);
         });
         
         let publicSaveRolls = saveRolls.filter(r => {return r.layer!=='gmlayer'})
@@ -3640,6 +3651,7 @@ const SmartAoE = (() => {
         var aoeColor = '#ff000050';
         var aoeOutlineColor = '#ff0000';
         var gridColor = '#000000';
+        let instant = false;
         let isDrawing = false;
         let ignoreAttr = '';
         let ignoreVal = '';
@@ -3660,6 +3672,7 @@ const SmartAoE = (() => {
         let conditionFail = '';
         let conditionPass = '';
         let zeroHPmarker = '';
+        let removeAtZero = true;
         let autoApply = false;
         let aoeFloat = false;
         
@@ -3684,7 +3697,7 @@ const SmartAoE = (() => {
         
         try {
             //--------------------------------------------------------------------
-            //   Apply Damage & Status Markers
+            //   Applies Damage & Status Markers via chat interaction
             //--------------------------------------------------------------------
             if(msg.type=="api" && msg.content.toLowerCase().indexOf("!smartapply")==0) {
                 let player = getObj('player',msg.playerid);
@@ -3692,7 +3705,7 @@ const SmartAoE = (() => {
                     who = getObj('player',msg.playerid).get('_displayname');
                     who===undefined ? whisperString='' : whisperString = `/w "${who}"`;
                 } else {
-                    whisperErrorString='';
+                    whisperString='';
                 }
                 
                 let args = msg.content.split(/\s+/);
@@ -3708,7 +3721,8 @@ const SmartAoE = (() => {
                 let marker = args[5].replace(/%%/g,'::').replace('n/a','') || '';         //not all commands will include status marker(s)
                 let zeroHPmarker = args[6].replace(/%%/g,'::').replace('n/a','') || ''    //not all commands will include seroHPmarker(s)
                 
-                let whisperOutput = args[7].includes('true') ? true : false;
+                let remove = args[7].includes('true') ? true : false;
+                let whisperOutput = args[8].includes('true') ? true : false;
                 
                 let token = getObj('graphic', tokenID);
                 if (token) {
@@ -3724,8 +3738,12 @@ const SmartAoE = (() => {
                         addStatusMarkers(tokenID, marker); 
                     }
                     
+                    if (remove) {
+                        token.remove();
+                    }
+                    
                 } else {
-                    sendChat(scriptName, `${whisperErrorString} TokenID ${tokenID} does not seem to exist. Perhaps it was deleted or the id is incorrect.`, null, {
+                    sendChat(scriptName, `${whisperString} TokenID ${tokenID} does not seem to exist. Perhaps it was deleted or the id is incorrect.`, null, {
                         noarchive: true
                     });
                 }
@@ -3901,7 +3919,7 @@ const SmartAoE = (() => {
                 //log(validToks);
                 
                 
-                
+                let instant = false;
                 if (aoeLinks.indices.length > 0) {
                     //for each link associated with selected token (could be originTok or controlTok)
                     var tokenRolls = [];
@@ -4014,23 +4032,18 @@ const SmartAoE = (() => {
                             })))
                             .then(async(messages) => processMessagesMaster(messages, damageRolls, tokenRolls, aoeLinks.links[a]))
                             .catch(sendErrorMessage);
+                    
+                        //finally, check for instantaneous AoE and set flag for deletion
+                        if (aoeLinks.links[a].instant) {
+                            instant = true;
+                        }
                     } //end aoeLink loop
-                    
-                    //let affectedIDs = [];
-                    //for (let i=0; i<tokenRolls.length; i++) {
-                    //    affectedIDs.push(tokenRolls[i].id);
-                    //    sendChat(scriptName,`/w "${who}" Token In area: ${tokenRolls[i].name} ${tokenRolls[i].formula} ${tokenRolls[i].formula}`);
-                    //}
-                    
-                    /*
-                    if (_.has(state, 'ScriptCards')) {
-                        state['ScriptCards'].storedStringVariable = affectedIDs.join(',');
-                        log(state['ScriptCards'].storedStringVariable);
-                    }
-                    */
-                    
                 }
                 
+                //if the AoE settings are set to instant, remove the selected token after triggering
+                if (instant) {
+                    tok.remove();
+                }
             }
             
             
@@ -4153,6 +4166,11 @@ const SmartAoE = (() => {
                                 gridColor = toFullColor(f[1])
                             }
                             break;
+                        case "instant":
+                            if (_.contains(['true','yes', '1'], param.toLowerCase())) {
+                                instant = true;
+                            }
+                            break;
                         case "isdrawing":
                             if (aoeFloat || _.contains(['true','yes', '1'], param.toLowerCase())) {
                                 isDrawing = true;
@@ -4170,7 +4188,6 @@ const SmartAoE = (() => {
                             break;
                         case "dc":
                             DC = parseInt(param);
-                            log("DC = " + DC)
                             break;
                         case "saveformula":
                             let s = param.toLowerCase();
@@ -4241,6 +4258,11 @@ const SmartAoE = (() => {
                         case "zerohpmarker":
                             //ensure no spaces between commas (required for the statusmarkers property of graphic object)
                             zeroHPmarker = param.split(',').map((s) => s.trim()).join(',');
+                            break;
+                        case "removeatzero":
+                            if (_.contains(['true','yes', '1'], param.toLowerCase())) {
+                                removeAtZero = true;
+                            }
                             break;
                         case "resistattr":
                             resistAttr = param;
@@ -4485,7 +4507,7 @@ const SmartAoE = (() => {
                         //create a link between the source and control tokens (stored in state object)
                         let oPt = new pt(oTok.get('left'), oTok.get('top'))
                         
-                        let newLink = makeAoELink(controlTokName, aoeType, coneWidth, aoeFloat, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttr, vulnerableAttr, immunityAttr, conditionPass, conditionFail, zeroHPmarker, hideNames, cardParameters);
+                        let newLink = makeAoELink(controlTokName, aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttr, vulnerableAttr, immunityAttr, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
                         
                         //log('makeAoELink complete');
                         //sendChat(scriptName,`/w "${who}" `+ 'Darkness created on Dynamic Lighting layer');
