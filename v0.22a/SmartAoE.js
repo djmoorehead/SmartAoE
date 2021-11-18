@@ -1,6 +1,6 @@
 const SmartAoE = (() => {
     const scriptName = "SmartAoE";
-    const version = '0.22';
+    const version = '0.22a';
     const schemaVersion = '0.1';
     
     var cardParameters = {};
