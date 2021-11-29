@@ -1,6 +1,6 @@
 const SmartAoE = (() => {
     const scriptName = "SmartAoE";
-    const version = '0.22';
+    const version = '0.23';
     const schemaVersion = '0.1';
     
     var cardParameters = {};
@@ -257,11 +257,12 @@ const SmartAoE = (() => {
         if (zeroHPmarker === '') { zeroHPmarker = 'n/a' }
         let whisperDamageMsg = (layer === 'gmlayer') ? 'true' : 'false';
         let removeAtZeroMsg = removeAtZero ? 'true' : 'false';
+        let barString = bar.join(',');
         
         //replace some problem characters before creating the !smartapply button action text. These will get un-replaced when triggered
         let tempName = name.replace(/'/g, '%apostrophe%').replace(/`/g, /%backtick%/g);
         
-        let applyDamLink = autoApply ? '' : ` href='!smartapply --args|${id}|"${tempName}"|${bar}|${damString}|${markerString}|${zeroHPmarker}|${removeAtZeroMsg}|${whisperDamageMsg}'`;
+        let applyDamLink = autoApply ? '' : ` href='!smartapply --args|${id}|"${tempName}"|${barString}|${damString}|${markerString}|${zeroHPmarker}|${removeAtZeroMsg}|${whisperDamageMsg}'`;
         damString = damString.replace('/', ' / ');
         
         let RVI_output = '';
@@ -3556,25 +3557,63 @@ const SmartAoE = (() => {
     
     const applyDamage = function(tokID, name, bar, damageArr, zeroHPmarker, removeAtZero=false) {
         let tok = getObj('graphic', tokID);
-        let currentHP = tok.get(`bar${bar}_value`) || 0;
-        let maxHP = parseInt(tok.get(`bar${bar}_max`)) || 0;
+        let currentHP = [];
+        let maxHP = [];
+        let newHP = [];
+        let amountHealed;
+        let remainingDamage;
+        
+        //Multiple bar values may be present. bar is an array of 1 to 3 elements. Damage will apply to them in order, cascading down if more damage remains.
+        if (bar.length > 0) {
+            bar.map(b => {
+                currentHP.push(parseInt(tok.get(`bar${b}_value`)) || 0);
+                maxHP.push(parseInt(tok.get(`bar${b}_max`)) || 99999);
+            });
+        } else {
+            currentHP.push(0);
+            maxHP.push(0);
+        }
         
         let damage = damageArr.map(e=>parseInt(e)).reduce((a, b) => (a+b));
         
-        let newHP;
-        let amountHealed;
         if (damage >= 0) {
             //damage can't reduce below 0
-            newHP = Math.max(currentHP - damage, 0);
+            //first bar value
+            newHP.push(Math.max(currentHP[0] - damage, 0));
+            if (damage > currentHP[0] && bar.length > 1) {
+                remainingDamage = damage - currentHP[0];
+                //second bar value
+                newHP.push(Math.max(currentHP[1] - remainingDamage, 0));
+                if (remainingDamage > currentHP[1] && bar.length > 2) {
+                    remainingDamage = remainingDamage - currentHP[1];
+                    //third bar value
+                    newHP.push(Math.max(currentHP[2] - remainingDamage, 0));
+                }
+            }
             returnString = `Applied ${damage} damage to ${name}`;
         } else {
             //negative damage = healing! Can't heal above max.
-            newHP = Math.min(currentHP - damage, maxHP);
-            amountHealed = newHP - currentHP;
+            //newHP = Math.min(currentHP - damage, maxHP);
+            let absDamage = Math.abs(damage);
+            newHP.push(Math.min(currentHP[0] - damage, maxHP[0]));
+            amountHealed = newHP[0] - currentHP[0];
+            
+            if (absDamage + currentHP[0] > maxHP[0] && bar.length > 1) {
+                remainingDamage = absDamage - (maxHP[0] - currentHP[0]);
+                //second bar value
+                newHP.push(Math.min(currentHP[1] - damage, maxHP[1]));
+                amountHealed += newHP[1] - currentHP[1];
+                if (remainingDamage + currentHP[1] > maxHP[1] && bar.length > 2) {
+                    remainingDamage = remainingDamage - (maxHP[1] - currentHP[1]);
+                    //third bar value
+                    newHP.push(Math.min(currentHP[2] - damage, maxHP[2]));
+                    amountHealed += newHP[2] - currentHP[2];
+                }
+            }
             returnString = newHP===maxHP ? `Healed ${name} by ${amountHealed} (@Max)` : `Healed ${name} by ${amountHealed}`;
         }
         
-        if (zeroHPmarker && newHP===0) {
+        if (zeroHPmarker && newHP[bar.length-1]===0) {
             let dummy = addStatusMarkers(tokID, zeroHPmarker);
         }
         
@@ -3584,7 +3623,10 @@ const SmartAoE = (() => {
             //grab the previous token settings before setting new ones
             let prevTok = JSON.parse(JSON.stringify(tok));
             //set new tok settings
-            tok.set(`bar${bar}_value`, newHP);
+            newHP.map((hp,idx) => {
+                tok.set(`bar${bar[idx]}_value`, newHP[idx]);
+            });
+            //tok.set(`bar${bar}_value`, newHP);
             //trigger tokenChange event for other api scripts
             notifyObservers('tokenChange',tok, prevTok);
             
@@ -3897,7 +3939,7 @@ const SmartAoE = (() => {
         let damageExpression2 = '';
         let damageType1 = '';
         let damageType2 = '';
-        let damageBar = 1;
+        let damageBar = [1];
         let conditionFail = '';
         let conditionPass = '';
         let zeroHPmarker = '';
@@ -4038,7 +4080,7 @@ const SmartAoE = (() => {
                 
                 let tokenID = args[1];
                 let name = args[2]
-                let bar = args[3];
+                let bar = args[3].split(',').map(b=>b.trim());
                 let damageArr = args[4].split('/').map(e=>parseInt(e));
                 
                 let marker = args[5].replace(/%%/g,'::').replace('n/a','') || '';         //not all commands will include status marker(s)
@@ -4267,13 +4309,17 @@ const SmartAoE = (() => {
                             }
                         });
                         
-                        //Next, omit origin token and any tokens that don't have at least one corner in the AoE bounding box
+                        //Next, omit origin token and any tokens that don't have at least one corner in the AoE bounding box (or at least one corner of AoE bounding box is within the token bounding box)
                         thisValidToks = thisValidToks.filter(obj => {
                             return obj.tok.get("_id") !== aoeLinks.links[a].originTokID &&
                                 (isPointInPolygon(obj.corners[0], aoeLinks.links[a].boundingBox) ||
                                 isPointInPolygon(obj.corners[1], aoeLinks.links[a].boundingBox) ||
                                 isPointInPolygon(obj.corners[2], aoeLinks.links[a].boundingBox) ||
-                                isPointInPolygon(obj.corners[3], aoeLinks.links[a].boundingBox))
+                                isPointInPolygon(obj.corners[3], aoeLinks.links[a].boundingBox) ||
+                                isPointInPolygon(aoeLinks.links[a].boundingBox[0], obj.corners) ||
+                                isPointInPolygon(aoeLinks.links[a].boundingBox[1], obj.corners) ||
+                                isPointInPolygon(aoeLinks.links[a].boundingBox[2], obj.corners) ||
+                                isPointInPolygon(aoeLinks.links[a].boundingBox[3], obj.corners))
                         });
                         
                         //sort the linked paths by distance to originPt
@@ -4552,7 +4598,7 @@ const SmartAoE = (() => {
                             }
                             break;
                         case "bar":
-                            damageBar = parseInt(param);
+                            damageBar = param.split(',').map(b=>parseInt(b.trim()));
                             break;
                         case "autoapply":
                             if (_.contains(['true','yes', '1'], param.toLowerCase())) {
