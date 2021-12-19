@@ -1,6 +1,6 @@
 const SmartAoE = (() => {
     const scriptName = "SmartAoE";
-    const version = '0.23';
+    const version = '0.24';
     const schemaVersion = '0.1';
     
     var cardParameters = {};
@@ -717,8 +717,8 @@ const SmartAoE = (() => {
                     ability = createObj('ability', {characterid: charID, name: '30ft-5eCone', action: '!smartaoe {{\n  --aoeType|5econe\n  --radius|30ft\n  --origin|nearest, face\n  --minGridArea|0.25\n  --fx|burn-fire\n}}', istokenaction: false});
                     ability = createObj('ability', {characterid: charID, name: '60ft-5eCone', action: '!smartaoe {{\n  --aoeType|5econe\n  --radius|60ft\n  --origin|nearest, face\n  --minGridArea|0.25\n  --fx|burn-fire\n}}', istokenaction: false});
                     ability = createObj('ability', {characterid: charID, name: 'Variable-5eCone', action: '!smartaoe {{\n  --aoeType|5econe\n  --origin|nearest,face\n  --minGridArea|0.25\n  --fx|burn-fire\n}}', istokenaction: false});
-                    //PF cones
-                    ability = createObj('ability', {characterid: charID, name: '15ft-PFCone', action: '!smartaoe {{\n  --aoeType|PFcone\n  --radius|15ft\n  --origin|nearest\n  --forceIntersection|1\n --minGridArea|0.50\n  --fx|burn-fire\n}}', istokenaction: false});
+                    //PF cones                                                                          
+                    ability = createObj('ability', {characterid: charID, name: '15ft-PFCone', action: '!smartaoe {{\n  --aoeType|PFcone\n  --radius|15ft\n  --origin|nearest, face\n  --forceIntersection|0\n  --minGridArea|0.50\n  --fx|burn-fire\n}}', istokenaction: false});
                     ability = createObj('ability', {characterid: charID, name: '30ft-PFCone', action: '!smartaoe {{\n  --aoeType|PFcone\n  --radius|30ft\n  --origin|nearest\n  --forceIntersection|1\n --minGridArea|0.50\n  --fx|burn-fire\n}}', istokenaction: false});
                     ability = createObj('ability', {characterid: charID, name: '60ft-PFCone', action: '!smartaoe {{\n  --aoeType|PFcone\n  --radius|60ft\n  --origin|nearest\n  --forceIntersection|1\n --minGridArea|0.50\n  --fx|burn-fire\n}}', istokenaction: false});
                     ability = createObj('ability', {characterid: charID, name: 'Variable-PFCone', action: '!smartaoe {{\n  --aoeType|PFcone\n  --origin|nearest\n  --forceIntersection|1\n --minGridArea|0.50\n  --fx|burn-fire\n}}', istokenaction: false});
@@ -868,7 +868,7 @@ const SmartAoE = (() => {
         //log(state[scriptName]);
     }
     
-    const makeAoELink = function(controlTokName, controlTokID, aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, originPt, minGridArea, minTokArea, originTokID, controlTokID, pathIDs, pageID, fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters) {
+    const makeAoELink = function(controlTokName, controlTokID, aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, wallWidth, originType, originPt, minGridArea, minTokArea, originTokID, pathIDs, pageID, fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters) {
     //const makeAoELink = function(aoeType, aoeColor, radius, originType, originPt, minGridArea, minTokArea, originTokID, controlTokID, pathIDs, pageID, fxType, saveFormula, saveName, DC) {
         //log(originTokID + ',' + controlTokID + ',' + pathIDs + ',' + pageID);
         let pathArr = [];
@@ -886,6 +886,7 @@ const SmartAoE = (() => {
             aoeOutlineColor: aoeOutlineColor,
             gridColor: gridColor,
             radius: radius,
+            wallWidth: wallWidth,
             fxType: fxType,
             minGridArea: minGridArea,
             minTokArea: minTokArea,
@@ -955,6 +956,7 @@ const SmartAoE = (() => {
                     let totalOverlapArea = 0;
                     link.pathIDs.forEach(pid => {
                         let path = getObj('path', pid);
+                        
                         //only check grid squares, not the outer AoE boundary path
                         if (path.get("width") * path.get("height") <= 4900*pageGridIncrement) {
                             let gridSq = getCellCoords(path.get("left"), path.get("top"), path.get("width"), path.get("height"));
@@ -988,8 +990,11 @@ const SmartAoE = (() => {
         }
     }
     
-    const spawnTokenAtXY =  function(who, tokenJSON, pageID, spawnX, spawnY, size, controlledby, isDrawing, currentSideNew) {
-        let spawnObj;
+    const spawnTokenAtXY =  async function(who, tokenJSON, pageID, spawnX, spawnY, size, controlledby, isDrawing, currentSideNew, numSpawns=1) {
+        //let spawnObj;
+        let controlTok;
+        let controlTok2;
+        let controlToks = [];
         let imgsrc;
         let sides;
         let sidesArr;
@@ -1039,11 +1044,27 @@ const SmartAoE = (() => {
                 }
             }
             
-            
+            controlTok = await createObj('graphic',baseObj);
+            controlToks.push(controlTok);
+            if (numSpawns === 2) {
+                controlTok2 = await createObj('graphic',baseObj);
+                controlToks.push(controlTok2);
+            }
+            return controlToks;
+            /*
             return new Promise(resolve => {
                 controlTok = createObj('graphic',baseObj);
-                resolve(controlTok);
+                if (numSpawns === 2) {
+                    return new Promise(resolve2 => {
+                        controlTok2 = createObj('graphic',baseObj);
+                        resolve2(controlTok2);
+                    });
+                    controlToks.push(controlTok2);
+                }
+                controlToks.push(controlTok);
+                resolve(controlToks);
             });
+            */
             
         }
         catch(err) {
@@ -1094,6 +1115,144 @@ const SmartAoE = (() => {
     
         //log(pointsJSON);
         return pointsJSON;
+    };
+    
+    const degreesToRadians = function (degrees) {
+        var pi = Math.PI;
+        return degrees * (pi/180);
+    }
+    
+    //cx, cy = coordinates of the center of rotation
+    //angle = clockwise rotation angle
+    //p = point object
+    const rotatePoint = function (cX,cY,angle, p){
+          s = Math.sin(angle);
+          c = Math.cos(angle);
+        
+          // translate point back to origin:
+          p.x -= cX;
+          p.y -= cY;
+        
+          // rotate point
+          newX = p.x * c - p.y * s;
+          newY = p.x * s + p.y * c;
+        
+          // translate point back:
+          p.x = newX + cX;
+          p.y = newY + cY;
+          
+          return p;
+        }
+    
+    const getWallParams = function (originPtPx, controlPtPx, radius, wallWidth) {
+        let rad = radius;
+        if (radius === 'variable') {
+            rad = distBetweenPts(originPtPx, controlPtPx);
+        } 
+        
+        let wallAngle = getAngle2ControlToken(originPtPx, controlPtPx);
+        let wallAngleRad = degreesToRadians(wallAngle);
+        
+        //get map coords of wall boundary, rotated around the originPt
+        //first, get unrotated rectangle corner and center points
+        let pt1_0 = new pt( originPtPx.x, originPtPx.y - wallWidth/2 );
+        let pt2_0 = new pt( originPtPx.x + rad, originPtPx.y - wallWidth/2 );
+        let pt3_0 = new pt( originPtPx.x + rad, originPtPx.y + wallWidth/2 );
+        let pt4_0 = new pt( originPtPx.x, originPtPx.y + wallWidth/2 );
+        let pCenter_0 = new pt( originPtPx.x + rad/2, originPtPx.y );
+        
+        
+        //then rotate these points around the originPt
+        let pt1 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, pt1_0);
+        let pt2 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, pt2_0);
+        let pt3 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, pt3_0);
+        let pt4 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, pt4_0);
+        let pCenter = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, pCenter_0);
+        
+        
+        //now, get dimensions of the rectangle circumscribing the rotated wall rectangle
+        let minX = Math.min(pt1.x, pt2.x, pt3.x, pt4.x);
+        let maxX = Math.max(pt1.x, pt2.x, pt3.x, pt4.x);
+        let minY = Math.min(pt1.y, pt2.y, pt3.y, pt4.y);
+        let maxY = Math.max(pt1.y, pt2.y, pt3.y, pt4.y);
+        let widthBB = maxX - minX;
+        let heightBB = maxY - minY;
+        
+        //find pts with minX, maxX, minY, MaxY
+        let ptsArr = [pt1, pt2, pt3, pt4];
+        let pMinX = ptsArr.reduce(function(prev, curr) {
+            return prev.x < curr.x ? prev : curr;
+        });
+        let pMaxX = ptsArr.reduce(function(prev, curr) {
+            return prev.x > curr.x ? prev : curr;
+        });
+        let pMinY = ptsArr.reduce(function(prev, curr) {
+            return prev.y < curr.y ? prev : curr;
+        });
+        let pMaxY = ptsArr.reduce(function(prev, curr) {
+            return prev.y > curr.y ? prev : curr;
+        });
+        
+        //here we are going to create a new polygon that is 1px wider on  each side.
+        //      This is to help overcome the floating point error issues with the isPointInPolygon function
+        let s = 10;
+        let tempPt1 = {x:pt1_0.x-s, y:pt1_0.y-s}
+        let tempPt2 = {x:pt2_0.x+s, y:pt2_0.y-s}
+        let tempPt3 = {x:pt3_0.x+s, y:pt3_0.y+s}
+        let tempPt4 = {x:pt4_0.x-s, y:pt4_0.y+s}
+        tempPt1 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, tempPt1);
+        tempPt2 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, tempPt2);
+        tempPt3 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, tempPt3);
+        tempPt4 = rotatePoint(originPtPx.x, originPtPx.y, wallAngleRad - 90*Math.PI/180, tempPt4);
+        let expandedPolygon = [tempPt1, tempPt2, tempPt3, tempPt4, tempPt1]
+        
+        //return the critical coords and dimensions (in VTT coordinate system)
+        return {
+            width: wallWidth,
+            angle: wallAngle,
+            radius: rad,
+            pt1: pt1,   //the corner pts
+            pt2: pt2,
+            pt3: pt3,
+            pt4: pt4,
+            pMinX: pMinX,     //corner pt with smallest X value
+            pMaxX: pMaxX,     //corner pt with largest X value
+            pMinY: pMinY,     //corner pt with smallest Y value
+            pMaxY: pMaxY,     //corner pt with largest Y value
+            pCenter: pCenter,   //the geometric center of the rotated wall
+            widthBB: widthBB,       //the width of the rectangle circumscribing the wall
+            heightBB: heightBB,      //the height of the rectangle circumscribing the wall
+            expandedPolygon: expandedPolygon    //a rectangle that is 1px wider on each side. This polygon is rotated already
+        }
+    }
+    
+    //The bounding box of the path will be a square with side lengths equal to the diagonal of the wall rectangle
+    const buildWallPath = function(wallParams) {
+        /*
+        let diag = 2*Math.sqrt( (len*len+width*width)/4 );
+        let ptCenter = new pt(diag/2, diag/2);
+        //first, find the coords of path corners when at 0deg rotation
+        let ptUL_0 = new pt( (diag-len)/2, (diag-width)/2 );
+        let ptUR_0 = new pt( (diag+len)/2, (diag-width)/2 );
+        let ptLR_0 = new pt( (diag+len)/2, (diag+width)/2 );
+        let ptLL_0 = new pt( (diag-len)/2, (diag+width)/2 );
+        
+        let angleRad = degreesToRadians(angle-90);
+        //now, rotate the four corners around the center of the path bounding box
+        let pt1 = rotatePoint(ptCenter.x, ptCenter.y, angleRad, ptUL_0);
+        let pt2 = rotatePoint(ptCenter.x, ptCenter.y, angleRad, ptUR_0);
+        let pt3 = rotatePoint(ptCenter.x, ptCenter.y, angleRad, ptLR_0);
+        let pt4 = rotatePoint(ptCenter.x, ptCenter.y, angleRad, ptLL_0);
+        */
+        let pt1 = wallParams.pt1;
+        let pt2 = wallParams.pt2;
+        let pt3 = wallParams.pt3;
+        let pt4 = wallParams.pt4;
+        //Full rectangle (5 pts - wraps back around to pt1 again)
+        let wallPointsJSON = `[[\"M\",${pt1.x},${pt1.y}],[\"L\",${pt2.x},${pt2.y}],[\"L\",${pt3.x},${pt3.y}],[\"L\",${pt4.x},${pt4.y}],[\"L\",${pt1.x},${pt1.y}]]`;
+        
+        //log(wallPointsJSON);
+        return wallPointsJSON;
     };
     
     const buildSquarePath = function(rad) {
@@ -1321,13 +1480,52 @@ const SmartAoE = (() => {
         return PtInUnits
     }
     
+    const addWidthToLineCoords = function(obj, pageGridIncrement, angle, width) {
+        //if the line is mostly horizontal, then add width to the top/bottom
+        //if the line is mostly vertical, then add width to the left/right
+        let newXVals = [];
+        let newYVals = [];
+        let posNeg = 1;
+        
+        //default is one square width (70px)
+        let numExtraSquares = Math.floor((width - 70*pageGridIncrement) / (70*pageGridIncrement));
+        
+        if ( (angle > 315 && angle <= 360) || (angle >= 0 && angle <= 45)|| (angle > 135 && angle <= 225) ) {
+            //vertical, add to width
+            for(let i=0; i<numExtraSquares; i++) {
+                posNeg = i % 2 == 0 ? 1 : -1 
+                obj.xVals.map(val => {
+                    newXVals.push(val + posNeg*70*pageGridIncrement);
+                });
+                obj.yVals.map(val => {
+                    newYVals.push(val);
+                });
+            }
+        } else if ( (angle > 45 && angle <= 135) || (angle > 225 && angle <= 315) ) {
+            //horizontal, add to height
+            for(let i=0; i<numExtraSquares; i++) {
+                posNeg = i % 2 == 0 ? 1 : -1 
+                obj.xVals.map(val => {
+                    newXVals.push(val);
+                });
+                obj.yVals.map(val => {
+                    newYVals.push(val + posNeg*70*pageGridIncrement);
+                });
+            }
+        }
+        
+        obj.xVals = obj.xVals.concat(newXVals);
+        obj.yVals = obj.yVals.concat(newYVals);
+        return obj;
+    }
+    
     const convertLocationsArrUnits2Pixels = function(obj, pageGridIncrement) {
         let newX = obj.xVals.map(val => val * 70 * pageGridIncrement)
         let newY = obj.yVals.map(val => val * 70 * pageGridIncrement)
         return {xVals: newX, yVals: newY};
     }
     
-    const getLineLocations = function (x1, y1, x2, y2, pageGridIncrement) {
+    const getLineLocations = function (x1, y1, x2, y2, pageGridIncrement, width) {
         let lineCoords = {
             xVals: [],
             yVals: []
@@ -1409,6 +1607,18 @@ const SmartAoE = (() => {
         }
         
         lineCoords = convertLocationsArrUnits2Pixels(lineCoords, pageGridIncrement)
+        
+        /*
+        if (width !== 70*pageGridIncrement) {
+            let angle = Math.atan2(dy, dx);
+            angle *= 180 / Math.PI;
+            angle -= 270;
+            do {
+              angle = 360 + angle
+            } while (angle < 0);
+            lineCoords = addWidthToLineCoords(lineCoords, pageGridIncrement, angle, width)
+        }
+        */
         //log('lineCoords follows');
         //log(lineCoords);
         return lineCoords;
@@ -1500,7 +1710,15 @@ const SmartAoE = (() => {
         return x_overlap * y_overlap;
     } 
     
-    
+    const rectanglesOverlap = function(topLeft1, bottomRight1, topLeft2, bottomRight2) {
+    	if (topLeft1.x > bottomRight2.x || topLeft2.x > bottomRight1.x) {
+    		return false;
+    	}
+    	if (topLeft1.y > bottomRight2.y || topLeft2.y > bottomRight1.y) {
+    		return false;
+    	}
+    	return true;
+    }
     
     /** Get relationship between a point and a polygon using ray-casting algorithm
      * @param {{x:number, y:number}} P: point to check
@@ -1530,6 +1748,43 @@ const SmartAoE = (() => {
         //log('inside = ' + inside);
         return inside? true: false;
     }
+    
+    //*******************************************************************************************************************************
+    /* The following is an alternative to the isPointInPolygon function, which appears to be more sensitive to floating point errors
+    //*******************************************************************************************************************************
+    *
+    *       
+    *       
+    *       
+    *       
+    */
+    //
+    function sqr(x) { return x * x }
+	function distSquared(v, w) { return sqr(v.x - w.x) + sqr(v.y - w.y) }
+	function distToSegmentSquared(P, endPt1, endPt2) {
+      	var l2 = distSquared(endPt1, endPt2);
+      	if (l2 == 0) return distSquared(p, endPt1);
+      	var t = ((P.x - endPt1.x) * (endPt2.x - endPt1.x) + (P.y - endPt1.y) * (endPt2.y - endPt1.y)) / l2;
+      	t = Math.max(0, Math.min(1, t));
+      	return distSquared(P, {x:endPt1.x + t*(endPt2.x-endPt1.x), y:endPt1.y + t*(endPt2.y-endPt1.y)});
+	}
+	function distToSegment(P, endPt1, endPt2) {
+		return Math.sqrt(distToSegmentSquared(P, endPt1, endPt2));
+	}  
+    const isPointInWall = function(P, polygon){
+        //first, look for cases where P lies on one of line segments of the polygon
+        for (let i=0;i<polygon.length-1;i+=1) {
+            let a = polygon[i];
+            let b = polygon[i + 1];
+            
+            if (distToSegment(P, a, b)<0.1) {
+                return true;
+            }
+        }
+        //If not on a line segment, use normal algorithm
+        return isPointInPolygon(P, polygon);
+    }
+    
     
     const isPointInCone = function(pt, oPt, rad, coneDirection, coneWidth, isFlatCone, calcType='Euclidean', gridIncrement=-999, scaleNumber=-999) {
         let deg2rad = Math.PI/180;
@@ -2189,6 +2444,299 @@ const SmartAoE = (() => {
         return circleCoords;
         
     }
+                                      
+    const getWallLocations = function(pageGridCenters, minGridArea, oPt, cPt, wallParams, pageGridIncrement) {
+        /*
+        let wallCoords = {
+            xVals: [35],
+            yVals: [35]
+        }
+        return wallCoords;
+        */
+        let wallCoords = {
+            xVals: [],
+            yVals: []
+        }
+        
+        //Define grid.  Grid is determined by bounding box of AoE
+                //Grid is comprised of an array of cell objects
+                    //cell objects are comprised of an area scalar and an array of points(endpoints plus intersections) in clockwise order (for area calcs)
+        let grid = [];
+        
+        /*
+        log('origin')
+        log(oPt)
+        log('pMinMax')
+        log(wallParams.pMinX)
+        log(wallParams.pMaxX)
+        log(wallParams.pMinY)
+        log(wallParams.pMaxY)
+        log('wallpts')
+        log(wallParams.pt1)
+        log(wallParams.pt2)
+        log(wallParams.pt3)
+        log(wallParams.pt4)
+        
+        log(pageGridCenters)
+        */
+        let minX = getClosestGridPt(wallParams.pMinX, pageGridCenters, pageGridIncrement).x;
+        let maxX = getClosestGridPt(wallParams.pMaxX, pageGridCenters, pageGridIncrement).x;
+        let minY = getClosestGridPt(wallParams.pMinY, pageGridCenters, pageGridIncrement).y;
+        let maxY = getClosestGridPt(wallParams.pMaxY, pageGridCenters, pageGridIncrement).y;
+        
+        //log('x range = ' + minX + ' to ' + maxX);
+        //log('y range = ' + minY + ' to ' + maxY);
+        for (let i=minX; i<=maxX; i=i+70*pageGridIncrement) {
+            for (let j=minY; j<=maxY; j=j+70*pageGridIncrement) {
+                //log('i = ' + i + ', j = ' + j);
+                //i & j are the x&y coords of the center of each grid cell
+                let centerOfCell = new pt(i, j);
+                let cell = {
+                    points: getCellCoords(i, j, 70*pageGridIncrement),  //initialized with [ptUL, ptUR, ptLR, ptLL, ptUL] (note repeat of ptUL to close the cell
+                    center: centerOfCell,
+                    area: 0
+                }
+                grid.push(cell);
+            }
+        }
+        
+        //log(grid);
+        
+        //find cells where all corners are within the cone OR there is a valid intersection of the cone with the cell. Remove all other cells from grid 
+        let wallAoEPolygon = [wallParams.pt1, wallParams.pt2, wallParams.pt3, wallParams.pt4, wallParams.pt1];
+        //log(wallAoEPolygon);
+    
+        for (let i=grid.length-1; i>-1; i--) {
+            
+            //log(i);
+            //log('start checking for entire cell wihtin defined AoE');
+            let ULinAoE = isPointInPolygon(grid[i].points[0], wallAoEPolygon);
+            let URinAoE = isPointInPolygon(grid[i].points[1], wallAoEPolygon);
+            let LRinAoE = isPointInPolygon(grid[i].points[2], wallAoEPolygon);
+            let LLinAoE = isPointInPolygon(grid[i].points[3], wallAoEPolygon);
+            //log(ULinAoE + ',' + URinAoE + ',' + LRinAoE + ',' + LLinAoE);
+            
+            
+            if (!(ULinAoE && URinAoE && LRinAoE && LLinAoE)) {
+                //log('entire cell not in wall, start checking intersections');
+                //all corners not within wall polygon, check for intersections (4 checks for each square segment)
+                
+                let topIntersections = [];
+                let rightIntersections = [];
+                let bottomIntersections = [];
+                let leftIntersections = [];
+                let numAddedPts = 0;
+                let insertIdx;
+                let intPt;          //intersection point (squareAoE edlge crossing cell border)
+                let containsVertex = false;   //check the squareAoE corner points 
+                let baseCell = grid[i].points.map(x => x);  //a copy of the base grid cell coordinates (used later to check for AoE vertices)
+                
+                // intersections of top grid segment with the wallAoE (have to check all four sides of wall)
+                intPt = getIntersectionPt(grid[i].points[0].x, grid[i].points[0].y, grid[i].points[1].x, grid[i].points[1].y, wallAoEPolygon[0].x, wallAoEPolygon[0].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(topIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[0].x, grid[i].points[0].y, grid[i].points[1].x, grid[i].points[1].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(topIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[0].x, grid[i].points[0].y, grid[i].points[1].x, grid[i].points[1].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(topIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[0].x, grid[i].points[0].y, grid[i].points[1].x, grid[i].points[1].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y, wallAoEPolygon[4].x, wallAoEPolygon[4].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(topIntersections,intPt) }
+                
+                
+                // intersections of right grid segment with two horizontal lines of squareAoE
+                intPt = getIntersectionPt(grid[i].points[1].x, grid[i].points[1].y, grid[i].points[2].x, grid[i].points[2].y, wallAoEPolygon[0].x, wallAoEPolygon[0].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(rightIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[1].x, grid[i].points[1].y, grid[i].points[2].x, grid[i].points[2].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(rightIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[1].x, grid[i].points[1].y, grid[i].points[2].x, grid[i].points[2].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(rightIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[1].x, grid[i].points[1].y, grid[i].points[2].x, grid[i].points[2].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y, wallAoEPolygon[4].x, wallAoEPolygon[4].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(rightIntersections,intPt) }
+                
+                //log(grid[i].points);
+                
+                
+                // intersections of bottom grid segment with two vertical lines of squareAoE
+                intPt = getIntersectionPt(grid[i].points[2].x, grid[i].points[2].y, grid[i].points[3].x, grid[i].points[3].y, wallAoEPolygon[0].x, wallAoEPolygon[0].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(bottomIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[2].x, grid[i].points[2].y, grid[i].points[3].x, grid[i].points[3].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(bottomIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[2].x, grid[i].points[2].y, grid[i].points[3].x, grid[i].points[3].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(bottomIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[2].x, grid[i].points[2].y, grid[i].points[3].x, grid[i].points[3].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y, wallAoEPolygon[4].x, wallAoEPolygon[4].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(bottomIntersections,intPt) }
+                
+                
+                // intersections of left grid segment with two horizontal lines of squareAoE
+                intPt = getIntersectionPt(grid[i].points[3].x, grid[i].points[3].y, grid[i].points[4].x, grid[i].points[4].y, wallAoEPolygon[0].x, wallAoEPolygon[0].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(leftIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[3].x, grid[i].points[3].y, grid[i].points[4].x, grid[i].points[4].y, wallAoEPolygon[1].x, wallAoEPolygon[1].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(leftIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[3].x, grid[i].points[3].y, grid[i].points[4].x, grid[i].points[4].y, wallAoEPolygon[2].x, wallAoEPolygon[2].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(leftIntersections,intPt) }
+                intPt = getIntersectionPt(grid[i].points[3].x, grid[i].points[3].y, grid[i].points[4].x, grid[i].points[4].y, wallAoEPolygon[3].x, wallAoEPolygon[3].y, wallAoEPolygon[4].x, wallAoEPolygon[4].y);
+                if (intPt) { let ptAdded = pushUniquePtToArray(leftIntersections,intPt) }
+                
+                //if (i===33) {
+                //   log('grid before intersections')
+                //    log(grid[i].points)
+                //}
+                
+                if (topIntersections.length > 0) {
+                    //log('index = ' + i + ' - found ' + topIntersections.length + ' top intersections - ');
+                    //log(topIntersections);
+                    for (let t=0; t<topIntersections.length; t++) {
+                        if (topIntersections[t]) {
+                            grid[i].points.push(topIntersections[t]);
+                            //grid[i].points.splice(insertIdx, 0, topIntersections[t]);
+                            numAddedPts += 1;
+                        }
+                    }
+                    //log(grid[i].points);
+                    //log('numAddedPts = ' + numAddedPts);
+                }
+                if (rightIntersections.length > 0) {
+                    //log('index = ' + i + ' - found ' + rightIntersections.length + ' right intersections - ');
+                    //log(rightIntersections);
+                    for (let t=0; t<rightIntersections.length; t++) {
+                        if (rightIntersections[t]) {
+                            grid[i].points.push(rightIntersections[t]);
+                            //grid[i].points.splice(insertIdx, 0, rightIntersections[t]);
+                            numAddedPts += 1;
+                        }
+                    }
+                    //log(grid[i].points);
+                    //log('numAddedPts = ' + numAddedPts);
+                }
+                if (bottomIntersections.length > 0) {
+                    //log('index = ' + i + ' - found ' + bottomIntersections.length + ' bottom intersections - ');
+                    //log(bottomIntersections);
+                    for (let t=0; t<bottomIntersections.length; t++) {
+                        if (bottomIntersections[t]) {
+                            grid[i].points.push(bottomIntersections[t]);
+                            //grid[i].points.splice(insertIdx, 0, bottomIntersections[t]);
+                            numAddedPts += 1;
+                        }
+                    }
+                    //log(grid[i].points);
+                    //log('numAddedPts = ' + numAddedPts);
+                }
+                if (leftIntersections.length > 0) {
+                    //log('index = ' + i + ' - found ' + leftIntersections.length + ' left intersections - ');
+                    //log(leftIntersections);
+                    for (let t=0; t<leftIntersections.length; t++) {
+                        if (leftIntersections[t]) {
+                            grid[i].points.push(leftIntersections[t]);
+                            //grid[i].points.splice(insertIdx, 0, leftIntersections[t]);
+                            numAddedPts += 1;
+                        }
+                    }
+                    //log(grid[i].points);
+                    //log('numAddedPts = ' + numAddedPts);
+                }
+                //if (i===33) {
+                //    log('grid after intersections')
+                //    log(grid[i].points)
+                //}
+                
+                //log('baseCell----------------');
+                //log(baseCell)
+                
+                //check grid cell for wallAoEPolygon vertices
+                //log('wallAoEPolygon---------')
+                //log(wallAoEPolygon);
+                
+                containsVertex = isPointInPolygon(wallAoEPolygon[0],baseCell);
+                if (containsVertex) {
+                    //log(wallAoEPolygon[0])
+                    //log(baseCell)
+                    //log('vertex 0 found at index ' + i)
+                    let ptAdded = pushUniquePtToArray(grid[i].points,wallAoEPolygon[0]); //returns 1 if pt added, 0 if not added
+                    numAddedPts += ptAdded;
+                }
+                
+                containsVertex = isPointInPolygon(wallAoEPolygon[1],baseCell);
+                if (containsVertex) {
+                    //log(wallAoEPolygon[1])
+                    //log(baseCell)
+                    //log('vertex 1 found at index ' + i)
+                    let ptAdded = pushUniquePtToArray(grid[i].points,wallAoEPolygon[1]);
+                    numAddedPts += ptAdded;
+                }
+                
+                containsVertex = isPointInPolygon(wallAoEPolygon[2],baseCell);
+                if (containsVertex) {
+                    //log(wallAoEPolygon[2])
+                    //log(baseCell)
+                    //log('vertex 2 found at index ' + i)
+                    let ptAdded = pushUniquePtToArray(grid[i].points,wallAoEPolygon[2]);
+                    numAddedPts += ptAdded;
+                }
+                
+                containsVertex = isPointInPolygon(wallAoEPolygon[3],baseCell);
+                if (containsVertex) {
+                    //log(wallAoEPolygon[3])
+                    //log(baseCell)
+                    //log('vertex 3 found at index ' + i)
+                    let ptAdded = pushUniquePtToArray(grid[i].points,wallAoEPolygon[3]);
+                    numAddedPts += ptAdded;
+                }
+                
+                //if (verticesAdded) {
+                    grid[i].points = sortPtsClockwise(grid[i].points);
+                //}
+                
+                
+                //must have two intersection pts to calculate area 
+                if (numAddedPts < 2) {
+                    grid.splice(i,1);
+                } else {
+                    //valid intersection, now filter out the grid points that are outside of the AoE (some corner pts from each grid cell)
+                   
+                    //log('### Sorted Grid pts with intersections')
+                    //log(grid[i].points);
+                    //if (i===33) {
+                    //    log('grid after vertices, before inPolygon filter')
+                    //    log(grid[i].points)
+                    //}
+                    
+                    //log('shortpoly')
+                    //log(shortWallPolygon)
+                    grid[i].points = grid[i].points.filter(pt => {
+                        return isPointInWall(pt, wallAoEPolygon);
+                    });
+                    //if (i===33) {
+                    //    log('grid after final filter')
+                    //    log(grid[i].points)
+                    //}
+                    grid[i].points = sortPtsClockwise(grid[i].points);
+                    //log('### filtered Grid pts with intersections')
+                    //log(grid[i].points);
+                    
+                    //calculate area with the filtered points that form an arbitrary polygon 
+                    let area = calcPolygonArea(grid[i].points);
+                    //log('grid after filter');
+                    //log(grid[i].points);
+                    //log('area of grid ' + i + ' = ' + area);
+                    grid[i].area = area
+                    //log('grid area = ' + grid[i].area)
+                    //remove the grid cell if not enough area is covered by the cone
+                    if (area < minGridArea*70*70*pageGridIncrement*pageGridIncrement) {
+                        //log('area filter, removed index ' + i)
+                        grid.splice(i,1);
+                    }
+                }
+            } 
+            
+        }
+        
+        //We have a filtered array of grid cells. Return the coordinates of the center of each remaining cell
+        for (let i=0; i<grid.length; i++) {
+            wallCoords.xVals.push(grid[i].center.x);
+            wallCoords.yVals.push(grid[i].center.y);
+        }
+        return wallCoords;
+        
+    }
     
     const getSquareLocations = function(pageGridCenters, aoeType, aoeFloat, minGridArea, oPt, cPt, rad, pageGridIncrement, offsetX, offsetY) {
         let squareCoords = {
@@ -2415,21 +2963,13 @@ const SmartAoE = (() => {
             } 
         }
         
-        
-        
         //We have a filtered array of grid cells. Return the coordinates of the center of each remaining cell
         for (let i=0; i<grid.length; i++) {
             squareCoords.xVals.push(grid[i].center.x);
             squareCoords.yVals.push(grid[i].center.y);
         }
-        //log(oPt);
-        //log(cPt);
-        //log(rad);
-        //log(offsetX);
-        //log(offsetY);
-        //log(squareCoords);
-        return squareCoords;
         
+        return squareCoords;
     }
     
     const getConeLocations = function(pageGridCenters, aoeType, minGridArea, oPt, cPt, coneDirection, coneWidth, rad, pageGridIncrement, pageScaleNumber, offsetX, offsetY, oWidth, oHeight) {
@@ -2879,7 +3419,7 @@ const SmartAoE = (() => {
         return allPts;
     }
     
-    const getPathLocations = function(link, oTok, cTok, originPtPx, controlPtPx, offsetX, offsetY, pageGridIncrement, pageScaleNumber) {
+    const getPathLocations = function(link, oTok, cTok, originPtPx, controlPtPx, offsetX, offsetY, pageGridIncrement, pageScaleNumber, wallParams) {
         let locationsArr;       //return value - array of pts (x & y)
         let dX, dY;             //used in Bresenham algorithm
         let coneDirection = 0;   //angle (in degrees) between originPt & controlPt
@@ -2934,6 +3474,10 @@ const SmartAoE = (() => {
                         rad = Math.max(Math.abs(originPtPx.x - controlPtPx.x), Math.abs(originPtPx.y - controlPtPx.y));
                     }
                     locationsArr = getSquareLocations(pageGridCenters, link.aoeType, link.aoeFloat, link.minGridArea, originPtPx, controlPtPx, rad, pageGridIncrement, offsetX, offsetY)
+                    break;
+                case 'wall':
+                    //walls are a bit different. We passed wallParams into this function, which includes radius, so we don't have to calculate again.
+                    locationsArr = getWallLocations(pageGridCenters, link.minGridArea, originPtPx, controlPtPx, wallParams, pageGridIncrement)
                     break;
                 case 'PFcircle':
                     //Fall through
@@ -3015,10 +3559,9 @@ const SmartAoE = (() => {
                     let oX, oY;
                     pageGridIncrement = page.get("snapping_increment");
                     pageScaleNumber = page.get("scale_number");
-                    
+                                                               
                     //possibly shift origin pt
-                    //link.originType = 'nope';
-                    if (aoeLinks.links[a].originType.match(/nearest/i) && aoeLinks.links[a].aoeType.match(/cone/i)) {
+                    if (aoeLinks.links[a].originType.match(/nearest/i) && (aoeLinks.links[a].aoeType.match(/cone/i) || (aoeLinks.links[a].aoeType.match(/wall/i)&&aoeLinks.links[a].forceIntersection===false)) ) {
                         let possibleOrigins = getPossibleOriginPts(originPtPx, oHeight, oWidth, pageGridIncrement, aoeLinks.links[a].originType.match(/face/i))
                         aoeLinks.links[a].originPts = possibleOrigins.map((x) => x)
                         //log('STATE - originPts')
@@ -3047,12 +3590,16 @@ const SmartAoE = (() => {
                     originPtPx = aoeLinks.links[a].originPts[originIndex];
                 }
                 
-                //let aoeType = 'line';   //temp hardcode
-                //aoeType = '5econe';   //temp hardcode
-                pathLocations = getPathLocations(aoeLinks.links[a], oTok, cTok, originPtPx, controlPtPx, offsetX, offsetY, pageGridIncrement, pageScaleNumber);
+                //walls are handled a bit differently. We're going to pre-calculate some parameters, which get used twice: once for grid area paths and once for aoe outline path 
+                let wallParams;
+                if (aoeLinks.links[a].aoeType==='wall') {
+                    wallParams = getWallParams(originPtPx, controlPtPx, aoeLinks.links[a].radius, aoeLinks.links[a].wallWidth)
+                }
+                
+                //This function returns the coords of the grid area paths (the individual squares)
+                pathLocations = getPathLocations(aoeLinks.links[a], oTok, cTok, originPtPx, controlPtPx, offsetX, offsetY, pageGridIncrement, pageScaleNumber, wallParams);
                 //log('pathLocations follows');
                 //log(pathLocations);
-                
                 
                 //define the bounding box of affected grid squares
                 let ptUL = new pt(Math.min(...pathLocations.xVals)-35*pageGridIncrement, Math.min(...pathLocations.yVals)-35*pageGridIncrement);
@@ -3079,8 +3626,8 @@ const SmartAoE = (() => {
                 
                 //create a path with the true outline of the AoE
                 if (aoeLinks.links[a].aoeType==='5econe') {
-                    //let originPtPx = new pt(oTok.get('left'), oTok.get('top'))
-                    //let controlPtPx = new pt(cTok.get('left'), cTok.get('top'))
+                    //
+                    //log('~~~~~~~~~~~~~~~~~~~~ TRIANGLE PATH~~~~~~~~~~~~~~~~~~~~');
                     let coneDirection = getAngle2ControlToken(originPtPx, controlPtPx);
                     if (aoeLinks.links[a].radius === 'variable') {
                         rad = distBetweenPts(originPtPx, controlPtPx);
@@ -3089,21 +3636,17 @@ const SmartAoE = (() => {
                     }
                     let coneWidth = 53.14;  //hardcode
                     let z = (rad / (2* Math.sin(Math.atan(0.5)))) - rad;
-                
-                    ////end pts of cone based on originPt and (coneDirection - coneWidth/2)
-                    //let coneEndPts = getConeEndPts(aoeType, oPt, coneDirection, coneWidth, rad, z);
-                    //log('rad = ' + rad);
-                    //log('coneDirection = ' + coneDirection);
+                    
                     pathstring = build5eCone(rad, z, coneWidth, coneDirection)
                     path = await new Promise(function(resolve){
                         //let thePath = createPath(pathstring, pageID, 'gmlayer', 'transparent', '#ff0000', 3, rad*2, rad*2, originPtPx.x-z, originPtPx.y-z);
                         let thePath = createPath(pathstring, pageID, 'objects', 'transparent', aoeLinks.links[a].aoeOutlineColor, 3, rad*2, rad*2, originPtPx.x-z, originPtPx.y-z);
                         resolve(thePath);
                     });
-                    //log('~~~~~~~~~~~~~~~~~~~~ TRIANGLE PATH~~~~~~~~~~~~~~~~~~~~');
-                    //log(path)
                     newPaths.push(path.get('_id'));
                 } else if (aoeLinks.links[a].aoeType==='cone' || aoeLinks.links[a].aoeType==='PFcone') {
+                    //
+                    //log('~~~~~~~~~~~~~~~~~~~~ CONE PATH~~~~~~~~~~~~~~~~~~~~');
                     let coneDirection = getAngle2ControlToken(originPtPx, controlPtPx);
                     if (aoeLinks.links[a].radius === 'variable') {
                         rad = distBetweenPts(originPtPx, controlPtPx);
@@ -3117,10 +3660,10 @@ const SmartAoE = (() => {
                         let thePath = createPath(pathstring, pageID, 'objects', 'transparent', aoeLinks.links[a].aoeOutlineColor, 3, rad*2, rad*2, originPtPx.x, originPtPx.y);
                         resolve(thePath);
                     });
-                    //log('~~~~~~~~~~~~~~~~~~~~ CONE PATH~~~~~~~~~~~~~~~~~~~~');
-                    //log(path)
                     newPaths.push(path.get('_id'));
                 } else if (aoeLinks.links[a].aoeType==='square') {
+                    //
+                    //log('~~~~~~~~~~~~~~~~~~~~ SQUARE PATH~~~~~~~~~~~~~~~~~~~~');
                     rad = aoeLinks.links[a].radius;
                     if (aoeLinks.links[a].radius === 'variable' && !aoeLinks.links[a].aoeFloat) {
                         rad = Math.max(Math.abs(originPtPx.x-controlPtPx.x), Math.abs(originPtPx.y-controlPtPx.y));
@@ -3132,10 +3675,10 @@ const SmartAoE = (() => {
                         let thePath = createPath(pathstring, pageID, 'objects', 'transparent', aoeLinks.links[a].aoeOutlineColor, 3, rad*2, rad*2, originPtPx.x, originPtPx.y);
                         resolve(thePath);
                     });
-                    //log('~~~~~~~~~~~~~~~~~~~~ SQUARE PATH~~~~~~~~~~~~~~~~~~~~');
-                    //log(path)
                     newPaths.push(path.get('_id'));
                 } else if (aoeLinks.links[a].aoeType==='circle' || aoeLinks.links[a].aoeType==='PFcircle') {
+                    //
+                    //log('~~~~~~~~~~~~~~~~~~~~ CIRCLE PATH~~~~~~~~~~~~~~~~~~~~');
                     if (aoeLinks.links[a].radius === 'variable') {
                         rad = distBetweenPts(originPtPx, controlPtPx);
                     } else {
@@ -3148,8 +3691,15 @@ const SmartAoE = (() => {
                         let thePath = createPath(pathstring, pageID, 'objects', 'transparent', aoeLinks.links[a].aoeOutlineColor, 3, rad*2, rad*2, originPtPx.x, originPtPx.y);
                         resolve(thePath);
                     });
-                    //log('~~~~~~~~~~~~~~~~~~~~ CIRCLE PATH~~~~~~~~~~~~~~~~~~~~');
-                    //log(path)
+                    newPaths.push(path.get('_id'));
+                } else if (aoeLinks.links[a].aoeType==='wall') {
+                    //
+                    //log('~~~~~~~~~~~~~~~~~~~~ WALL PATH~~~~~~~~~~~~~~~~~~~~');
+                    pathstring = buildWallPath(wallParams);
+                    path = await new Promise(function(resolve){
+                        let thePath = createPath(pathstring, pageID, 'objects', 'transparent', aoeLinks.links[a].aoeOutlineColor, 3, wallParams.heightBB, wallParams.widthBB, wallParams.pCenter.x, wallParams.pCenter.y);
+                        resolve(thePath);
+                    });
                     newPaths.push(path.get('_id'));
                 }
                 
@@ -3216,10 +3766,7 @@ const SmartAoE = (() => {
         let tempLinks = [];
         if (aoeLinks) {
             tempLinks = aoeLinks.links.filter(link => {
-                return (link.controlTokID===tokID 
-                            && (link.forceIntersection //|| 
-                            //(link.aoeFloat===true && (link.aoeType==='square' || link.aoeType==='circle'))
-                        ))
+                return (link.forceIntersection && (link.controlTokID===tokID || (link.originTokID===tokID && obj.get('name')==='AoEControlToken')))
             });
         }
         
@@ -3248,6 +3795,11 @@ const SmartAoE = (() => {
                 //If deleted token is a source token, remove all control tokens associated with that source token
                 if (tokID === aoeLinks.links[i].originTokID && tokID !== aoeLinks.links[i].controlTokID) {
                     controlToks.push(aoeLinks.links[i].controlTokID);
+                }
+                
+                //for walls (for which we spawned *two* controlToks), delete the "origin tok" also
+                if (aoeLinks.links[i].aoeType.match(/wall/i)) {
+                    controlToks.push(aoeLinks.links[i].originTokID);
                 }
                 
                 //log('removing link index=' + index);
@@ -3310,6 +3862,7 @@ const SmartAoE = (() => {
         
         foundInlines.forEach((inline) => {
             index = inline.replace(/\$\[\[/,'').replace(/\]\]/,'')
+            
             str = str.replace(inline, parsedInlines[index].total);
             
             inlineArr.push(parsedInlines[index]);
@@ -3321,8 +3874,9 @@ const SmartAoE = (() => {
         msg.content = msg.content
             .replace(/<br\/>\n/g, ' ')
             .replace(/(\{\{(.*?)\}\})/g," $2 ")
-        
+            
         let parsedInlines = libInline.getRollData(msg) || [];
+        
         //Check for inline rolls
         //inlineContent = processInlinerolls(msg);
         let args = msg.content.split(/\s+--/);
@@ -3330,6 +3884,7 @@ const SmartAoE = (() => {
         args = args.map(arg=>{
                 let cmds = arg.split('|');
                 let retVals = processInlinerolls2(cmds[1], parsedInlines);
+                
                 return {
                     cmd: cmds.shift().toLowerCase().trim(),
                     params: retVals.text,
@@ -3904,12 +4459,14 @@ const SmartAoE = (() => {
         let pageID;
         let selected = msg.selected;
         let radius = 'variable';             //maximum radius, in pixels
+        let wallWidth = 70;
         let originType = 'center';         //"nearest" corner/face, "center"
         let aoeType = 'line';
         let offsetX = 0;
         let offsetY = 0;
         let forceIntersection;
         let coneWidth;
+        var controlToks = [];
         var controlTok = {};             //hoist to top so we can set from within a callback function
         let minGridArea = 0.01;            //from 0 to 1, minimum fraction of grid cell to be "counted" as within AoE (ignored for line effects)
         let minTokArea = 0.01;             //from 0 to 1, minimum fraction of token area in order to be "counted" as within AoE
@@ -3925,6 +4482,14 @@ const SmartAoE = (() => {
         let isDrawing = false;
         let ignoreAttr = '';
         let ignoreVal = '';
+        //let filter = {              //optional filters for which tokens will be ignored
+        //    type: "",               //types include "char" and "tok"
+        //    attr: "",               //key to filter on. e.g. "npc_type" attribute for a character sheet, or "bar3" for a token filter
+        //    vals: [],                //array of values for which to filter against filter.attr     e.g. ["celestial", "fiend", "undead"]
+        //    compareType: [],        //possible values: 'contains'(val is somewhere in string), '@'(exact match), '>' or '<' (numeric comparison)
+        //    ignore: [],             //flag to determine if the value is an ignore filter or a positive match filter
+        //    anyValueAllowed: false,  //this flag will bypass normal checks. Used only for charFilters - The attribute just needs to exist in order for the token to be ignored 
+        //}
         let DC = 0;
         let noSave = false;
         let saveFormula = '';
@@ -3960,9 +4525,11 @@ const SmartAoE = (() => {
         
         let oTok;                   //origin token
         let convertRadius = "";      //will we need to convert range from pixels to "u" or another page-defined distance unit?
-        let convertRange = "";      //will we need to convert range from pixels to "u" or another page-defined distance unit?
+        let convertWidth = "";      //will we need to convert the wallWidth from pixels to "u" or another page-defined distance unit?
         let losBlocks = false;      //Will DL walls block AoE? (will look at 5 pts per token to determine LoS)
         let hideNames = false;
+        let getFillColor = false;
+        let getOutlineColor = false;
         
         try {
             //-------------------------------------------------------------------------------
@@ -4182,7 +4749,7 @@ const SmartAoE = (() => {
                     if (aoeLinks.indices.length > 0) {
                         //for each link associated with selected token (could be originTok or controlTok)
                         for (let a=0; a<aoeLinks.indices.length; a++) {
-                            if (aoeLinks.links[a].aoeFloat === false) {     //if floating AoE, rotating the origin point has no meaning
+                            if (aoeLinks.links[a].aoeFloat === false || aoeLinks.links[a].aoeType.match(/wall/i) ) {     //if floating AoE, rotating the origin point has no meaning (unless it is a wall, lol)
                             
                                 //find new index (recycle through array of potential originPts)
                                 if (aoeLinks.links[a].originIndex + direction < 0) {
@@ -4312,14 +4879,7 @@ const SmartAoE = (() => {
                         //Next, omit origin token and any tokens that don't have at least one corner in the AoE bounding box (or at least one corner of AoE bounding box is within the token bounding box)
                         thisValidToks = thisValidToks.filter(obj => {
                             return obj.tok.get("_id") !== aoeLinks.links[a].originTokID &&
-                                (isPointInPolygon(obj.corners[0], aoeLinks.links[a].boundingBox) ||
-                                isPointInPolygon(obj.corners[1], aoeLinks.links[a].boundingBox) ||
-                                isPointInPolygon(obj.corners[2], aoeLinks.links[a].boundingBox) ||
-                                isPointInPolygon(obj.corners[3], aoeLinks.links[a].boundingBox) ||
-                                isPointInPolygon(aoeLinks.links[a].boundingBox[0], obj.corners) ||
-                                isPointInPolygon(aoeLinks.links[a].boundingBox[1], obj.corners) ||
-                                isPointInPolygon(aoeLinks.links[a].boundingBox[2], obj.corners) ||
-                                isPointInPolygon(aoeLinks.links[a].boundingBox[3], obj.corners))
+                                rectanglesOverlap(obj.corners[0], obj.corners[2], aoeLinks.links[a].boundingBox[0], aoeLinks.links[a].boundingBox[2])
                         });
                         
                         //sort the linked paths by distance to originPt
@@ -4469,6 +5029,13 @@ const SmartAoE = (() => {
                                 convertRadius = u[0]
                             }
                             break;
+                        case "width":
+                            wallWidth = parseFloat(param);
+                            let wu = param.match(/[a-zA-Z]+/gi);   //if not an empty string, we will use page settings to convert radius to "u" or other map-defined units
+                            if (wu !== null) {
+                                convertWidth = wu[0]
+                            }
+                            break;
                         case "controltokname":
                             controlTokName = param;
                             break;
@@ -4483,19 +5050,12 @@ const SmartAoE = (() => {
                             if (w.includes('circle')) {
                                 if (w.includes('float')) {
                                     aoeFloat = true;
-                                    //isDrawing = true;
                                 }
                                 aoeType = w.includes('pfcircle') ? 'PFcircle' : 'circle'
-                                //if (w.includes('pfcircle')) {
-                                //    aoeType = 'PFcircle';
-                                //} else {
-                                //    aoeType = 'circle';
-                                //}
                             } else if (w.includes('sq')) {
                                 aoeType = 'square';
                                 if (w.includes('float')) {
                                     aoeFloat = true;
-                                    //isDrawing = true;
                                 }
                             } else if (w.includes('5econe')) {
                                 aoeType = '5econe';
@@ -4511,6 +5071,10 @@ const SmartAoE = (() => {
                                     sendChat(scriptName,`${whisperString} Unable to determine cone width. 90deg cone will be used.`);
                                     coneWidth = 90;
                                 }
+                            } else if (w.includes('wall')) {
+                                aoeType = 'wall';
+                                aoeFloat = true;
+                                originType = 'nearest,face'
                             } else {    //default
                                 aoeType = 'line';
                             }
@@ -4541,15 +5105,40 @@ const SmartAoE = (() => {
                             fxType = param;
                             break;
                         case "aoecolor":
+                            //user passed an html color
                             if ( param.match(/#/) ) {
                                 let f = param.split('#')
                                 aoeColor = toFullColor(f[1])
+                            //else user wants to use the player color
+                            } else if (param.includes('player') && 'API' !== msg.playerid) {
+                                if (player) {   //player was obtained above from msg.playerid. Will fail when called from API
+                                    aoeColor = player.get("color")+'50';
+                                    usePlayerColor = true;
+                                } else {
+                                    sendChat(scriptName,`${whisperString} Error attempting to set aoeColor to player color, so default color will be used`);
+                                }
+                            //if no player object already, attempt to get from a player id or player name argument
+                            } else if ('API' === msg.playerid) {
+                                //attempt to get player color later in the script (after all args have been parsed - user should have passed a playerID)
+                                getFillColor = true;
                             }
                             break;
                         case "aoeoutlinecolor":
+                            //user passed an html color
                             if ( param.match(/#/) ) {
-                                let c = param.split('#')
-                                aoeOutlineColor = toFullColor(c[1])
+                                let f = param.split('#')
+                                aoeOutlineColor = toFullColor(f[1])
+                            //else user wants to use the player color
+                            } else if (param.includes('player') && 'API' !== msg.playerid) {
+                                if (player) {   //player was obtained above from msg.playerid. Will fail when called from API
+                                    aoeOutlineColor = player.get("color")+'50';
+                                } else {
+                                    sendChat(scriptName,`${whisperString} Error attempting to set aoeOutlineColor to player color, so default color will be used`);
+                                }
+                            //if no player object already, attempt to get from a player id or player name argument
+                            } else if ('API' === msg.playerid) {
+                                //attempt to get player color later in the script (after all args have been parsed - user should have passed a playerID)
+                                getOutlineColor = true;
                             }
                             break;
                         case "gridcolor":
@@ -4569,6 +5158,7 @@ const SmartAoE = (() => {
                             }
                             break;
                         case "ignore":
+                            
                             let ig = param.split(',').map(e=>e.trim());
                             if (ig.length < 2) {
                                 throw 'Invalid argument syntax.<br>Structure is --ignore|attrName,value';
@@ -4593,7 +5183,7 @@ const SmartAoE = (() => {
                                 saveName = saveList[s].name;
                             } else {
                                 //custom formula, user-defined
-                                saveFormula = param.replace('<<','[[').replace('>>',']]').replace('a{','@{');
+                                saveFormula = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
                                 //example: "<<1d20 +a{dodge}[DODGE]>>"" becomes "[[1d20 +@{dodge}[DODGE]]]"
                             }
                             break;
@@ -4609,15 +5199,15 @@ const SmartAoE = (() => {
                             let d1 = param.toLowerCase();
                             if (d1.search('<<') !== -1) {
                                 //custom formula, user-defined
-                                damageFormula1 = param.replace('<<','[[').replace('>>',']]').replace('a{','@{');
+                                damageFormula1 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
                                 rollDamage1 = true;
-                                
                                 //example: "<<(8+?{Cast at what level?|3,0|4,1|5,2|6,3|7,4|8,5|9,6})d6>>"" becomes something like "[[(8+1)d6]]"
                             } else {
                                 if (inlines[0] === undefined) {
                                     damageBase1 = parseInt(d1);
                                 } else {
-                                    damageFormula1 = `[[${inlines[0].expression}]]`;
+                                    //damageFormula1 = `[[${inlines[0].expression}]]`;
+                                    damageFormula1 = `[[${inlines[0].expression.replace(/&#91;/g,'[').replace(/&#93;/g,']')}]]`;
                                     rollDamage1 = true;
                                 }
                             }
@@ -4626,14 +5216,15 @@ const SmartAoE = (() => {
                             let d2 = param.toLowerCase();
                             if (d2.search('<<') !== -1) {
                                 //custom formula, user-defined
-                                damageFormula2 = param.replace('<<','[[').replace('>>',']]').replace('a{','@{');
+                                damageFormula2 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
                                 rollDamage2 = true;
                                 //example: "<<(8+?{Cast at what level?|3,0|4,1|5,2|6,3|7,4|8,5|9,6})d6>>"" becomes something like "[[(8+1)d6]]"
                             } else {
                                 if (inlines[0] === undefined) {
                                     damageBase1 = parseInt(d2);
                                 } else {
-                                    damageFormula2 = `[[${inlines[0].expression}]]`;
+                                    //damageFormula2 = `[[${inlines[0].expression}]]`;
+                                    damageFormula2 = `[[${inlines[0].expression.replace(/&#91;/g,'[').replace(/&#93;/g,']')}]]`;
                                     rollDamage2 = true;
                                 }
                             }
@@ -4775,7 +5366,12 @@ const SmartAoE = (() => {
                         sendChat(scriptName, 'When SmartAoE is called by another script, it must pass both the selected token ID and the playerID');
                         return;
                     }
-                    who = getObj('player',playerID).get('_displayname');
+                    let p = getObj('player',playerID);
+                    if (getFillColor = true) { aoeColor = p.get('color')+'50' }
+                    if (getOutlineColor = true) { aoeOutlineColor = p.get('color') }
+                    
+                    //who = getObj('player',playerID).get('_displayname');
+                    who = p.get('_displayname');
                     controlledby = playerID;
                     oTok = getObj("graphic",selectedID);
                 } else {
@@ -4861,8 +5457,8 @@ const SmartAoE = (() => {
                     offsetY = offsetY * 70 * pageGridIncrement
                 }
                 
-                let spawnX_max = parseInt(thePage.get("width")) * 70/pageGridIncrement; //page size in pixels
-                let spawnY_max = parseInt(thePage.get("height")) * 70/pageGridIncrement;
+                let spawnX_max = parseInt(thePage.get("width")) * 70; //page size in pixels
+                let spawnY_max = parseInt(thePage.get("height")) * 70;
                 
                 if (originX + offsetX < 0 || originX + offsetX > spawnX_max || originY + offsetY < 0 || originY + offsetY > spawnY_max) {
                     sendChat(scriptName, `${whisperString} Error: The provided offsets would spawn the controlToken off the map!`);
@@ -4886,25 +5482,45 @@ const SmartAoE = (() => {
                     }
                 }
                 
-                //possibly convert the range from user-supplied units to pixels
-                if (convertRange !== "") {
+                //This is a fix for wall AoE's
+                //for fixed length "aoeType|line, float" we must reduce the effective length by one square.
+                //      This is because the Bresenheim line algorithm always includes the origin square, and the way lines are calculated were originally "from the caster"
+                /*
+                if (aoeType === 'line' && aoeFloat === true && radius !== 'variable' && pageGridIncrement !== 0) {
+                    radius = radius - (70 * pageGridIncrement);
+                }
+                */
+                
+                //possibly convert the wallWidth from user-supplied units to pixels
+                if (convertWidth !== "") {
                     if (pageGridIncrement !== 0) {  //grid map
-                        if (convertRange === "u") {
-                            range = range * 70 * pageGridIncrement;                 //convert from "u" to pixels
+                        if (convertWidth === "u") {
+                            wallWidth = wallWidth * 70 * pageGridIncrement;                 //convert from "u" to pixels
                         } else {
-                            range = (range * 70 * pageGridIncrement) / pageScaleNumber; //convert from page units to pixels
+                            wallWidth = (wallWidth * 70 * pageGridIncrement) / pageScaleNumber; //convert from page units to pixels
                         }
                     } else {                        //gridless map, only use page settings
-                        if (convertRange === "u") {
-                            sendChat(scriptName, `${whisperString} Warning: Units \"u\" selected on a gridless map. Range will be calculated in pixels and will probably be much smaller than expected`);
+                        if (convertWidth === "u") {
+                            sendChat(scriptName, `${whisperString} Warning: Units \"u\" selected on a gridless map. radius will be calculated in pixels and will probably be much smaller than expected`);
                         } else {
-                            range = (range * 70) / pageScaleNumber;
+                            wallWidth = (wallWidth * 70) / pageScaleNumber;
                         }
                     }
                 }
                 
-                //typically will forceIntersection for float AoE's, unless 1 square or smaller or if --forceIntersection was explicitly set by user
-                if (forceIntersection===undefined) {
+                //assign default forceIntersection behavior if undefined by user
+                if (forceIntersection===undefined && aoeType==='wall') {
+                    //If wall width is even number of squares, ControlToks should snap to intersection
+                    let sizeSq = 70*pageGridIncrement;
+                    let wallWidthSquares = wallWidth/sizeSq;
+                    if(wallWidthSquares%2=== 0) {
+                        forceIntersection = true;
+                        isDrawing = true;
+                    } else {
+                        forceIntersection = false;
+                    }
+                } else if (forceIntersection===undefined) {
+                    //typically will forceIntersection for float AoE's, unless 1 square or smaller or if --forceIntersection was explicitly set by user
                     if (aoeFloat===true && (aoeType==='circle' || aoeType==='PFcircle' || aoeType==='square') && radius > 35/pageGridIncrement) {
                         forceIntersection = true;
                         isDrawing = true;
@@ -4945,7 +5561,7 @@ const SmartAoE = (() => {
                         //create a link between the source and control tokens (stored in state object)
                         let oPt = new pt(oTok.get('left'), oTok.get('top'))
                         
-                        let newLink = makeAoELink(controlTokName, controlTok.get("_id"), aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
+                        let newLink = makeAoELink(controlTokName, controlTok.get("_id"), aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, wallWidth, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), path.get('_id'), controlTok.get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
                         
                         //Immediately trigger a "change:graphic" event on the origin/controlTok to generate the AoE
                         smartAoE_handleTokenChange (controlTok,controlTok)
@@ -4961,34 +5577,52 @@ const SmartAoE = (() => {
                         return;
                     }
                     spawnObj.get("_defaulttoken", async function(defaultToken) {
-                        controlTok = await spawnTokenAtXY(who, defaultToken, pageID, originX+offsetX, originY+offsetY, controlTokSize, controlledby, isDrawing, controlTokSide);
+                        let spawnX = originX+offsetX;
+                        let spawnY = originY+offsetY;
+                        
+                        let numSpawns = 1;
+                        if (aoeType === 'wall') {
+                            numSpawns = 2;
+                            if (forceIntersection===true) {
+                                //for even width walls that snap to intersections, we will pre-snap them to the lower right corner
+                                spawnX = spawnX + 35*pageGridIncrement;
+                                spawnY = spawnY + 35*pageGridIncrement;
+                            }
+                        }
+                        
+                        controlToks = await spawnTokenAtXY(who, defaultToken, pageID, spawnX, spawnY, controlTokSize, controlledby, isDrawing, controlTokSide, numSpawns);
                         
                         let pathstring = buildSquarePath(35*pageGridIncrement);
-                        let path = createPath(pathstring, pageID, 'objects', aoeColor, gridColor, 2, 70*pageGridIncrement, 70*pageGridIncrement, controlTok.get("left"), controlTok.get("top"));
+                        let path = createPath(pathstring, pageID, 'objects', aoeColor, gridColor, 2, 70*pageGridIncrement, 70*pageGridIncrement, controlToks[0].get("left"), controlToks[0].get("top"));
                         
                         if (path) {
-                            if (controlTok.get('width') > 70*pageGridIncrement) {
-                                toBack(controlTok);
+                            if (controlToks[0].get('width') > 70*pageGridIncrement) {
+                                toBack(controlToks[0]);
+                                if (controlToks.length > 1) { toBack(controlToks[1]) }
                                 toBack(path);
                             } else {
-                                toBack(controlTok);
+                                toBack(controlToks[0]);
+                                if (controlToks.length > 1) { toBack(controlToks[1]) }
                                 toBack(oTok);
                                 toBack(path);
                             }
                             
-                            //create a link between the source and control tokens (stored in state object)
-                            let oPt = new pt(oTok.get('left'), oTok.get('top'))
-                            let newLink = makeAoELink(controlTokName, controlTok.get("_id"), aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), controlTok.get('_id'), path.get('_id'), controlTok.get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
+                            if (controlToks.length > 1) {
+                                //create a link between the source and control tokens (stored in state object).
+                                //in this case, the origin token is now the 2nd "controlTok" spawned
+                                let oPt = new pt(controlToks[1].get('left'), controlToks[1].get('top'))
+                                let newLink = makeAoELink(controlTokName, controlToks[0].get("_id"), aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, wallWidth, originType, oPt, minGridArea, minTokArea, controlToks[1].get('_id'), path.get('_id'), controlToks[0].get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
+                            } else {
+                                //create a link between the source and control tokens (stored in state object)
+                                let oPt = new pt(oTok.get('left'), oTok.get('top'))
+                                let newLink = makeAoELink(controlTokName, controlToks[0].get("_id"), aoeType, coneWidth, aoeFloat, instant, forceIntersection, aoeColor, aoeOutlineColor, gridColor, radius, wallWidth, originType, oPt, minGridArea, minTokArea, oTok.get('_id'), path.get('_id'), controlToks[0].get('_pageid'), fxType, saveFormula, saveName, ignoreAttr, ignoreVal, DC, noSave, damageBar, autoApply, damageFormula1, damageFormula2, damageBase1, damageBase2, damageType1, damageType2, rollDamage1, rollDamage2, damageSaveRule, resistanceRule, vulnerableRule, immunityRule, resistAttrs, vulnerableAttrs, immunityAttrs, conditionPass, conditionFail, zeroHPmarker, removeAtZero, hideNames, cardParameters);
+                            }
                         } else {
                             sendChat(scriptName, `${whisperString} Unknown error. createObj failed. AoE path not created.`);
                             return;
                         }
                     });
                 }
-                
-                
-                
-                
             }
         } 
         catch(err) {
