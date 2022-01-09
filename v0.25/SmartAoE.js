@@ -4478,6 +4478,10 @@ const SmartAoE = (() => {
         let getFillColor = false;
         let getOutlineColor = false;
         
+        let resourceName = "";
+        let resourceCost = 0;
+        let resourceAlias = "";
+        
         try {
             //-------------------------------------------------------------------------------
             //   Clears the State Object of all aoeLinks!
@@ -5301,6 +5305,23 @@ const SmartAoE = (() => {
                                 cardParameters.leftmargin = '-12px';
                             }
                             break;
+                        case "resource":
+                            let r = param.split(',');
+                            resourceName = r[0].trim();
+                            if (r.length > 0) {
+                                resourceCost = parseFloat(r[1].trim());
+                                if (!isNumber(resourceCost)) {
+                                    retVal.push('Non-numeric resource cost detected (' + r[1] + ').');
+                                }
+                            } else {
+                                resourceCost = 1;
+                            }
+                            if (r.length > 1) {
+                                resourceAlias = r[2].trim()
+                            } else {
+                                resourceAlias = resourceName;
+                            }
+                            break;
                         default:
                             retVal.push('Unexpected argument identifier (' + option + ').');
                             break;    
@@ -5385,6 +5406,36 @@ const SmartAoE = (() => {
                 originX = oTok.get("left");
                 originY = oTok.get("top");
                 originPt = new pt(originX, originY);
+                
+                //--------------RESOURCE MANAGEMENT----------------
+                if (resourceName !== '') {
+                    let oChar = getObj("character", oTok.get("represents"));
+                    if (oChar) {
+                        let attr = findObjs({                              
+                            _type: "attribute",
+                            name: resourceName,
+                            _characterid: oChar.get('_id')
+                        }, {caseInsensitive: true})[0];
+                        
+                        if (attr) {
+                            let resourceCurrent = parseFloat(attr.get('current'));
+                            if (!isNumber(resourceCurrent)) {
+                                sendChat(scriptName, `${whisperString} Non-numeric current resource value detected (${resourceName} = ${attr.get('current')})`, null, {noarchive:true});
+                                return;
+                            } else if (resourceCurrent - resourceCost < 0) {
+                                sendChat(scriptName, `${whisperString} Not enough ${resourceAlias}! <br> Current ${resourceAlias} = ${resourceCurrent}, Cost = ${resourceCost}`, null, {noarchive:true});
+                                return;
+                            } else {
+                                let newVal = resourceCurrent - resourceCost;
+                                attr.set('current', newVal);
+                                sendChat(scriptName, `${whisperString} ${resourceAlias} reduced by ${resourceCost}. Current value = ${newVal}`, null, {noarchive:true});
+                            }
+                        } else {
+                            sendChat(scriptName, `${whisperString} Resource '${resourceName}' is not found.`, null, {noarchive:true});
+                            return;
+                        }
+                    }
+                }
                 
                 //log('oTok_XY = ' + originX + ', ' + originY);
                 
