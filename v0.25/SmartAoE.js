@@ -5308,7 +5308,7 @@ const SmartAoE = (() => {
                         case "resource":
                             let r = param.split(',');
                             resourceName = r[0].trim();
-                            if (r.length > 0) {
+                            if (r.length > 1) {
                                 resourceCost = parseFloat(r[1].trim());
                                 if (!isNumber(resourceCost)) {
                                     retVal.push('Non-numeric resource cost detected (' + r[1] + ').');
@@ -5316,7 +5316,7 @@ const SmartAoE = (() => {
                             } else {
                                 resourceCost = 1;
                             }
-                            if (r.length > 1) {
+                            if (r.length > 2) {
                                 resourceAlias = r[2].trim()
                             } else {
                                 resourceAlias = resourceName;
