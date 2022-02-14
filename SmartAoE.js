@@ -1,12 +1,13 @@
 const SmartAoE = (() => {
     const scriptName = "SmartAoE";
-    const version = '0.24';
+    const version = '0.25';
     const schemaVersion = '0.1';
     
     var cardParameters = {};
     var tokenMarkerURLs = {};
     
     const defaultParameters = {
+        leftmargin: '-42px',
 		whisper: false,
 		tableborder: "2px solid #000000;",
 		tablebgcolor: "#EEEEEE",
@@ -69,33 +70,6 @@ const SmartAoE = (() => {
     
     let tableLineCounter = 0;
     let targetNum = 0;
-    let htmlTableEnd = `</table>`;
-    let htmlTitleTemplate = `<div style="display: table; !{tableborder}; background-color: !{tablebgcolor}; width: 270px; text-align: left; border-radius: !{tableborderradius}; border-collapse: separate; box-shadow: !{tableshadow};margin-left:0px">` +
-                              `<div style="display: table-header-group; background-image: !{titlecardbackground}; border-bottom: !{titlecardbottomborder};">` +
-                                `<div style="display: table-row;">` +
-                                  `<div style="display: table-cell; padding: 2px 2px; text-align: center; border-bottom: 2px solid #444444;">` +
-                                    `<span style="font-family: !{titlefontface}; font-style:normal; font-size: !{titlefontsize}; line-height: !{titlefontlineheight}; font-weight: bold; color: !{titlefontcolor}; text-shadow: -1px 1px 0 #000, 1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;">=X=TITLE=X=</span>` +
-                                    `<br><span style="font-family: !{subtitlefontface}; font-variant: normal; font-size: !{subtitlefontsize}; font-style:normal; font-weight: bold; color: !{subtitlefontcolor}; ">=X=SUBTITLE=X=</span>` +
-                                  `</div>` +
-                                `</div>` +
-                              `</div>`;
-              
-    
-    let htmlTemplate = `<div style="display: table; border: !{tableborder}; background-color: !{tablebgcolor}; width: 100%; text-align: left; border-radius: !{tableborderradius}; border-collapse: separate; box-shadow: !{tableshadow};">` +
-                            `<div style="display: table-header-group; background-image: !{titlecardbackground}; border-bottom: !{titlecardbottomborder};">` +
-                                `<div style="display: table-row;">` +
-                                    `<div style="display: table-cell; padding: 2px 2px; text-align: center; border-bottom: 2px solid #444444;">` +
-                                        `<span style="font-family: !{titlefontface}; font-style:normal; font-size: !{titlefontsize}; line-height: !{titlefontlineheight}; font-weight: bold; color: !{titlefontcolor}; text-shadow: -1px 1px 0 #000, 1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;">=X=TITLE=X=</span><br />` +
-                                        `<span style="font-family: !{subtitlefontface}; font-variant: normal; font-size: !{subtitlefontsize}; font-style:normal; font-weight: bold; color: !{subtitlefontcolor}; ">=X=SUBTITLE=X=</span>` +
-                                    '</div>' +
-                                '</div>' +
-                            '</div>' +
-                        '<div style="display: table-row-group;">'
-	
-	let htmlTemplateHiddenTitle = `<div style="display: table; border: !{tableborder}; background-color: !{tablebgcolor}; width: 100%; text-align: left; border-radius: !{tableborderradius}; border-collapse: separate; box-shadow: !{tableshadow};">` +
-	                                    `<div style="display: table-row-group;">`;
-	let htmlRowTemplate = `<div style="display: table-row; =X=ROWBG=X=;"><div style="display: table-cell; padding: 0px 0px; font-family: !{bodyfontface}; font-style: normal; font-weight:normal; font-size: !{bodyfontsize}; "><span style="line-height: !{lineheight}; color: =X=FONTCOLOR=X=;">=X=ROWDATA=X=</span></div></div>`;
-	let htmlTemplateEnd = `</div></div><br />`;
     
     
     //---------------------------------------------------------------------------------------
@@ -141,7 +115,7 @@ const SmartAoE = (() => {
 		}
 		
 		
-        let output = `<div style="margin-left:-42px">` + 
+        let output = `<div style="margin-left:!{leftmargin}">` + 
                         `<div style="display: table; border: !{tableborder}; background-color: !{tablebgcolor}; width: 270px; text-align: left; border-radius: !{tableborderradius}; border-collapse: separate; box-shadow: !{tableshadow}">` +
                             `<div style="display: table-header-group; background-image: !{titlecardbackground}; border-bottom: !{titlecardbottomborder};">` +
                                 `<div style="display: table-row;">` +
@@ -220,7 +194,7 @@ const SmartAoE = (() => {
     }
     
     const buildGMOutput = function (saveRows, cardParameters) {
-        let output = `<div style="margin-left:-42px">` +
+        let output = `<div style="margin-left:!{leftmargin}">` +
                          `<table style="width:270px; border-collapse:collapse; table-layout:fixed; font-size:!{bodyfontsize}; font-family: !{bodyfontface}">` +
                             `<tr>` +
                                 `<td style="width:150px;padding:3px;width:85%;vertical-align:middle;text-align:left;font-weight:bolder;"></td>` +
@@ -356,7 +330,7 @@ const SmartAoE = (() => {
 			"tableborder", "tablebgcolor", "tableborderradius", "tableshadow", "titlecardbackground", "titlecardbottomborder",
 			"titlefontsize", "titlefontlineheight", "titlefontcolor", "bodyfontsize", "subtitlefontsize", "subtitlefontcolor",
 			"titlefontface", "bodyfontface", "subtitlefontface", "buttonbackground", "buttontextcolor", "buttonbordercolor",
-			"dicefontcolor", "dicefontsize", "descriptiontext"
+			"dicefontcolor", "dicefontsize", "descriptiontext", "leftmargin"
 		];
 
 		for (let i=0; i<styleList.length; i++) {
@@ -466,32 +440,6 @@ const SmartAoE = (() => {
         return str.replace(regExp, c => ("&" + entities[c] + ";"));
     } 
     
-    const makeBox = (header, subheader, freetext, content) => {
-          return "<div style=\"border: 1px solid #888;background:#fff;border-radius:15px;padding:3px 3px 1px;margin-left:-42px\">" +
-            `<h4 style="text-align:center">${header}</h4>` +
-            `<h5 style="text-align:center">${subheader || ""}</h5>` +
-            `<table style="width:100%">${content}</table>` +
-            (freetext ? `<div style="text-align:center;margin-bottom:4px">${freetext}</div>` : "") +
-            "</div>";
-        }
-    const makeRow = (pic, name, roll1, roll2, isLast) => {
-          return `<tr${isLast ? "" :" style=\"border-bottom: 1px solid #ddd\""}>` +
-            makeName(pic, name) +
-            `<td style="text-align:center">${roll1}</td>` +
-            (roll2 ? `<td style="text-align:center">${roll2}</td>` : "") +
-            "</tr>";
-        }
-    const makeName = (pic, name) => {
-          const imgStyle = "display:inline-block;height:30px;width:30px;vertical-align:middle;margin-right:4px";
-          return "<td style=\"padding:3px;height:30px;width:85%\">" +
-            (pic ? `<div style="${imgStyle};background:url('${pic}') 0/contain no-repeat"></div>` : "") +
-            `<span style="vertical-align:middle;font-weight:bolder">${name}</span>` +
-            "</td>";
-        }
-    const makeCommandButton = (name, command, useBorder) => {
-          const style = `style="font-weight:bold;color:#000;background:#fff;border:${useBorder?"1px solid black;padding:2px;margin:1px 0":"none;padding:0"}"`;
-          return `<a href="${htmlReplace(command)}" ${style}>${name}</a>`;
-        }
     const makeInlineroll = (roll, hideformula) => {
           const boundary = results => {
             switch (detectCritical(results)) {
@@ -3437,8 +3385,8 @@ const SmartAoE = (() => {
         let pageGridCenters = [];
         let pageWidth = page.get('width');
         let pageHeight = page.get('height');
-        for (let i=0-pageWidth; i<2*pageWidth; i++) {
-            for (let j=0-pageHeight; j<2*pageHeight; j++) {
+        for (let i=0-pageWidth; i<1.5*pageWidth*(1/pageGridIncrement); i++) {
+            for (let j=0-pageHeight; j<1.5*pageHeight*(1/pageGridIncrement); j++) {
                 pageGridCenters.push(new pt(35*pageGridIncrement+i*70*pageGridIncrement, 35*pageGridIncrement+j*70*pageGridIncrement))
             }
         }
@@ -3721,8 +3669,8 @@ const SmartAoE = (() => {
         //log(pageGridIncrement);
         
         let intersections = [];
-        for (let i=0; i<=pageWidthPx; i+=70*pageGridIncrement) {
-            for (let j=0; j<=pageHeightPx; j+=70*pageGridIncrement) {
+        for (let i=0; i<=pageWidthPx*(1/pageGridIncrement); i+=70*pageGridIncrement) {
+            for (let j=0; j<=pageHeightPx*(1/pageGridIncrement); j+=70*pageGridIncrement) {
                 //log('i=' + i + ', j=' + j);
                 
                 intersections.push(new pt(i, j))
@@ -3731,6 +3679,7 @@ const SmartAoE = (() => {
         //log('intersections.length = ' + intersections.length);
         let tokPt = new pt(tok.get('left'), tok.get('top'))
         let newPt = getClosestGridPt(tokPt, intersections, pageGridIncrement)
+        //log(tokPt);
         //log(newPt);
         
         //grab the previous token settings before setting new ones
@@ -3760,7 +3709,6 @@ const SmartAoE = (() => {
         let aoeLinks = getAoELinks(tokID);
         //log('aoeLinks = next line')
         //log(aoeLinks)
-        
         
         //potentially force the AoEControlToken to snap to grid intersection for floating AoE squares
         let tempLinks = [];
@@ -4049,7 +3997,6 @@ const SmartAoE = (() => {
         //   then, we will format the final chat output
         let freetext = "";
         let rowData = '';
-        
         if (damageRolls.length > 0) {
             messages.forEach((msgList, j) => {
                 const inlinerollData = (msgList[0].inlinerolls || []).map(roll => {
@@ -4530,6 +4477,10 @@ const SmartAoE = (() => {
         let hideNames = false;
         let getFillColor = false;
         let getOutlineColor = false;
+        
+        let resourceName = "";
+        let resourceCost = 0;
+        let resourceAlias = "";
         
         try {
             //-------------------------------------------------------------------------------
@@ -5183,7 +5134,7 @@ const SmartAoE = (() => {
                                 saveName = saveList[s].name;
                             } else {
                                 //custom formula, user-defined
-                                saveFormula = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
+                                saveFormula = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{').replace(/\s+/g, '');
                                 //example: "<<1d20 +a{dodge}[DODGE]>>"" becomes "[[1d20 +@{dodge}[DODGE]]]"
                             }
                             break;
@@ -5199,7 +5150,7 @@ const SmartAoE = (() => {
                             let d1 = param.toLowerCase();
                             if (d1.search('<<') !== -1) {
                                 //custom formula, user-defined
-                                damageFormula1 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
+                                damageFormula1 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{').replace(/\s+/g, '');
                                 rollDamage1 = true;
                                 //example: "<<(8+?{Cast at what level?|3,0|4,1|5,2|6,3|7,4|8,5|9,6})d6>>"" becomes something like "[[(8+1)d6]]"
                             } else {
@@ -5216,7 +5167,7 @@ const SmartAoE = (() => {
                             let d2 = param.toLowerCase();
                             if (d2.search('<<') !== -1) {
                                 //custom formula, user-defined
-                                damageFormula2 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{');
+                                damageFormula2 = param.replace(/<</g,'[[').replace(/>>/g,']]').replace(/a{/g,'@{').replace(/\s+/g, '');
                                 rollDamage2 = true;
                                 //example: "<<(8+?{Cast at what level?|3,0|4,1|5,2|6,3|7,4|8,5|9,6})d6>>"" becomes something like "[[(8+1)d6]]"
                             } else {
@@ -5347,6 +5298,30 @@ const SmartAoE = (() => {
                         case "oddrowfontcolor":
                             cardParameters.oddrowfontcolor = param;
                             break;
+                        case "chatavatarsenabled":
+                            if (_.contains(['true','yes', '1'], param.toLowerCase())) {
+                                cardParameters.leftmargin = '-42px';
+                            } else {
+                                cardParameters.leftmargin = '-12px';
+                            }
+                            break;
+                        case "resource":
+                            let r = param.split(',');
+                            resourceName = r[0].trim();
+                            if (r.length > 1) {
+                                resourceCost = parseFloat(r[1].trim());
+                                if (!isNumber(resourceCost)) {
+                                    retVal.push('Non-numeric resource cost detected (' + r[1] + ').');
+                                }
+                            } else {
+                                resourceCost = 1;
+                            }
+                            if (r.length > 2) {
+                                resourceAlias = r[2].trim()
+                            } else {
+                                resourceAlias = resourceName;
+                            }
+                            break;
                         default:
                             retVal.push('Unexpected argument identifier (' + option + ').');
                             break;    
@@ -5431,6 +5406,36 @@ const SmartAoE = (() => {
                 originX = oTok.get("left");
                 originY = oTok.get("top");
                 originPt = new pt(originX, originY);
+                
+                //--------------RESOURCE MANAGEMENT----------------
+                if (resourceName !== '') {
+                    let oChar = getObj("character", oTok.get("represents"));
+                    if (oChar) {
+                        let attr = findObjs({                              
+                            _type: "attribute",
+                            name: resourceName,
+                            _characterid: oChar.get('_id')
+                        }, {caseInsensitive: true})[0];
+                        
+                        if (attr) {
+                            let resourceCurrent = parseFloat(attr.get('current'));
+                            if (!isNumber(resourceCurrent)) {
+                                sendChat(scriptName, `${whisperString} Non-numeric current resource value detected (${resourceName} = ${attr.get('current')})`, null, {noarchive:true});
+                                return;
+                            } else if (resourceCurrent - resourceCost < 0) {
+                                sendChat(scriptName, `${whisperString} Not enough ${resourceAlias}! <br> Current ${resourceAlias} = ${resourceCurrent}, Cost = ${resourceCost}`, null, {noarchive:true});
+                                return;
+                            } else {
+                                let newVal = resourceCurrent - resourceCost;
+                                attr.set('current', newVal);
+                                sendChat(scriptName, `${whisperString} ${resourceAlias} reduced by ${resourceCost}. Current value = ${newVal}`, null, {noarchive:true});
+                            }
+                        } else {
+                            sendChat(scriptName, `${whisperString} Resource '${resourceName}' is not found.`, null, {noarchive:true});
+                            return;
+                        }
+                    }
+                }
                 
                 //log('oTok_XY = ' + originX + ', ' + originY);
                 
