@@ -1,6 +1,6 @@
 const SmartAoE = (() => {
     const scriptName = "SmartAoE";
-    const version = '0.26';
+    const version = '0.27';
     const schemaVersion = '0.1';
     
     var cardParameters = {};
@@ -1011,6 +1011,7 @@ const SmartAoE = (() => {
             baseObj.height = size;
             baseObj.controlledby = controlledby;
             baseObj.isdrawing = isDrawing;
+            baseObj.layer = 'objects';
             
             if (tooltip !== '') {
                 baseObj.tooltip = tooltip;
@@ -3443,8 +3444,8 @@ const SmartAoE = (() => {
         let pageWidth = page.get('width');
         let pageHeight = page.get('height');
         
-        for (let i=0-pageWidth; i<1.5*pageWidth*(1/pageGridIncrement); i++) {
-            for (let j=0-pageHeight; j<1.5*pageHeight*(1/pageGridIncrement); j++) {
+        for (let i=0-1.5*pageWidth; i<1.5*pageWidth*(1/pageGridIncrement); i++) {
+            for (let j=0-1.5*pageHeight; j<1.5*pageHeight*(1/pageGridIncrement); j++) {
                 pageGridCenters.push(new pt(35*pageGridIncrement+i*70*pageGridIncrement, 35*pageGridIncrement+j*70*pageGridIncrement))
             }
         }
