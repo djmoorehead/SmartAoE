@@ -5872,6 +5872,10 @@ const SmartAoE = (() => {
                     });
                 }
                 
+                if (casterCondition && !casterConditionOnFail) {
+                    addStatusMarkers(oTok.get('_id'), casterCondition);
+                }
+                
                 //Posiibly play sound fx when the control token is spawned
                 if (spawnSound !== '') {
                     playJukeboxTrack(spawnSound, whisperString);
