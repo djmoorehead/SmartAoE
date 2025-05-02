@@ -3607,34 +3607,7 @@ const SmartAoE = (() => {
         }
         return -1;
     }
-    
-    /*
-    async function asyncPathToBackByID(id, page) {
-        let zOrder = page.get('_zorder');
-        log(zOrder)
-        let pathType = getPathType();  //returns either 'path' or 'pathv2' based on Campaign property
-        let path =  getObj(pathType, id);
-        toBack(path);
-        zOrder = page.get('_zorder');
-        log(zOrder)
-    };
-    */
-    ///*
-    async function asyncPathToBackByID(id, page) {
-        let pathType = getPathType();
-        let zOrder = page.get('_zorder');
-        //log(zOrder)
-        return new Promise(resolve => {
-            let path =  getObj(pathType, id);
-            log(path)
-            toBack(path);
-            //zOrder = page.get('_zorder');
-            //log(zOrder)
-            resolve();
-        });
-    }
-    //*/
-    
+   
     const getPathDimensions = function(pathstring){
         let maxX = -Infinity;
         let maxY = -Infinity;
@@ -3914,24 +3887,6 @@ const SmartAoE = (() => {
                     let dim = (pathType=='pathv2') ? getPathDimensions(pathstring) : {w: path.get('width'), h: path.get('height')};
                     pathDimensions.push(dim);
                 }
-                
-                /*
-                log(newPaths.length)
-                //let page = getObj('page', newPaths[0]);
-                let zOrder = page.get('_zorder');
-                //log(zOrder)
-                for await (let [_index, id] of newPaths.entries()) {
-                    log(`Starting run ${_index}`);
-                    let locOrder = page.get('_zorder');
-                    await asyncPathToBackByID(id, page);
-                    if (page.get('_zorder') !== locOrder) {
-                        log(`== Order was changed in run ${_index}`);
-                    }
-                    log(`Ending run ${_index}`);
-                }
-                zOrder = page.get('_zorder');
-                */
-                //log(zOrder)
                 
                 //Update the State object with new paths, originIndex, and bounding box array
                 updateAoELink(aoeLinks.indices[a], newPaths, pathDimensions, aoeLinks.links[a].originIndex, aoeLinks.links[a].boundingBox);
@@ -4944,7 +4899,7 @@ const SmartAoE = (() => {
                 if (args.length > 1) {
                     args = args[1].split(/\|/);
                 }
-                log(args)
+                //log(args)
                 let damageMsg = '';
                 //let marker = '';
                 //let zeroHPmarker = ''
