@@ -963,9 +963,14 @@ const SmartAoE = (() => {
         let linkObjs = [];
         let indices = [];
         let pathType = getPathType();
-        
+        log(pathType)
+        log('fromTarget = ' + fromTarget)
         if (fromTarget) {
+            log('true condition')
             let tok = getObj('graphic', ID);
+            log(tok)
+            log(state[scriptName].links)
+            log(state[scriptName].links.length)
             let tokX = tok.get("left");
             let tokY = tok.get("top");
             let tokWidth = tok.get("width");
@@ -979,21 +984,10 @@ const SmartAoE = (() => {
             state[scriptName].links.forEach((link, index) => {
                 if (link.pageID === pageID) {
                     let totalOverlapArea = 0;
-                    for (i=0;i<link.pathIDs.length;i+1){
-                        let path = getObj(pathType, link.pathIDs[i]);
-                        
-                        //only check grid squares, not the outer AoE boundary path
-                        //if (path.get("width") * path.get("height") <= 4900*pageGridIncrement) {
-                        if (link.pathDimensions[i].w * link.pathDimensions[i].h <= 4900*pageGridIncrement) {
-                            let gridSq = getCellCoords(path.get("left"), path.get("top"), link.pathDimensions[i].w, link.pathDimensions[i].h);
-                            let overlapArea = calcRectangleOverlapArea(gridSq, tokCorners);
-                            totalOverlapArea += overlapArea;
-                        }
-                    }
-                    if (totalOverlapArea >= link.minTokArea * tokArea) {
-                        linkObjs.push(link);
-                        indices.push(index);
-                    }
+                    log('num paths = ' + link.pathIDs.length)
+                    
+                    linkObjs.push(link);
+                    indices.push(index);
                 }
             });
         } else {
@@ -2224,7 +2218,8 @@ const SmartAoE = (() => {
         let pathDistID = [];
         pathsArr.forEach((pathID) => {
             tempPath = getObj(pathType, pathID);
-            tempPt = new pt(tempPath.get("left"), tempPath.get("top"))
+            let pos = (pathType=='pathv2') ? {x:tempPath.get("x"), y:tempPath.get("y")} : {x:tempPath.get("left"), y:tempPath.get("top")}
+            tempPt = new pt(pos.x, pos.y)
             dist = distBetweenPts(tempPt, oPt);
             pathDistID.push({ id:pathID, dist: dist });
         });
@@ -4866,10 +4861,12 @@ const SmartAoE = (() => {
                 
                 if (targetTok) {
                     //let tokCenterPt = {x: targetTok.get("left"), y: targetTok.get("top")};
+                    log('calling getAoELinks')
                     let aoeLinks = getAoELinks(targetTokID, true);
                     
                     if (aoeLinks) {
                         aoeLinks.links.forEach(link => {
+                            log('sendchat follows')
                             sendChat('', `!smarttrigger ${link.controlTokID} ${targetTok.get("_id")}`)
                         })
                     }
@@ -5064,6 +5061,7 @@ const SmartAoE = (() => {
                     tok = getObj("graphic",args[1]);
                     targetID = args[2];
                     targetTok = getObj("graphic", targetID);
+                    log('targetTok = ' + targetTok)
                     singleTarget = true;
                 }
                 
@@ -5182,9 +5180,10 @@ const SmartAoE = (() => {
                             if (tempPath) {
                                 //if (tempPath.get("width") <= 70*pageGridIncrement) {
                                 if (aoeLinks.links[a].pathDimensions[p].w <= 70*pageGridIncrement) {
+                                    let pos = (pathType=='pathv2') ? {x:tempPath.get("x"), y:tempPath.get("y")} : {x:tempPath.get("left"), y:tempPath.get("top")}
                                     //possibly spawn FX
                                     if (aoeLinks.links[a].fxType !== '' && singleTarget===false) {
-                                        spawnFx(tempPath.get("left"), tempPath.get("top"), aoeLinks.links[a].fxType, pageID);
+                                        spawnFx(pos.x, pos.y, aoeLinks.links[a].fxType, pageID);
                                     }
                                     //log('pathID iteration p = ' + p);
                                     //log(thisValidToks);
@@ -5192,7 +5191,6 @@ const SmartAoE = (() => {
                                     for (let t=0; t<thisValidToks.length; t++) {
                                         //log('checking token');
                                         //log(aoeLinks.links[a].pathDimensions[p].w + ', ' + log(aoeLinks.links[a].pathDimensions[p].h))
-                                        let pos = (pathType=='pathv2') ? {x:tempPath.get("x"), y:tempPath.get("y")} : {x:tempPath.get("left"), y:tempPath.get("top")}
                                         let pathRect = getCellCoords(pos.x, pos.y, aoeLinks.links[a].pathDimensions[p].w);
                                         let overlapArea = calcRectangleOverlapArea(pathRect, thisValidToks[t].corners);
                                         thisValidToks[t].overlapArea += overlapArea;
